@@ -1,5 +1,10 @@
-## Hi there 👋
+I am chongwoo Seo, and i am student in seoultech
+[Seoul Tech] (https://seoultech.ac.kr/).
 
+My major is **computer engineering**
+My main programing languages is *pyhton*
+
+I am happy to sutdy :smile:
 <!--
 **seochongwoo/seochongwoo** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
