@@ -1,10 +1,10 @@
-I am chongwoo Seo, and i am student in seoultech
+I am chongwoo Seo, and I am a student in seoultech
 [Seoul Tech](https://seoultech.ac.kr/).
 
 My major is **computer engineering**
-My main programing languages is *pyhton*
+My main programing languages is *python*
 
-I am happy to sutdy :smile:
+I am happy to study :smile:
 if you want to reach me please e - mail
 scw0413@seoultech.ac.kr
 
