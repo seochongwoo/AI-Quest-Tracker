@@ -11,7 +11,7 @@ scw0413@seoultech.ac.kr
 > We're living the future so
 > the present is our past.
 
-# AI Quest Tracker
+## AI Quest Tracker
 오픈소스 habit tracker를 기반으로, AI를 활용해 성공 확률 예측·추천·피드백을 제공하는 프로젝트입니다.
 
 ## 목표
