@@ -1,29 +1,32 @@
 from fastapi import FastAPI
-import pandas as pd
-from pathlib import Path
+from fastapi.responses import HTMLResponse
+from .utils import plot_user_completed, plot_quest_completion_rate
 
-# 데이터 경로
-data_path = Path(__file__).parent.parent / "data" / "sample_quest.csv"
-data = pd.read_csv(data_path)
-
-# 앱 생성
 app = FastAPI(title="AI Quest Tracker API")
 
-# 기본 루트
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"message": "AI Quest Tracker API 준비 완료!"}
+    return """
+    <html>
+        <head><title>AI Quest Tracker</title></head>
+        <body>
+            <h1>AI Quest Tracker API 준비 완료!</h1>
+            <p><a href="/plot/user"><button>사용자별 완료 퀘스트 그래프</button></a></p>
+            <p><a href="/plot/quest"><button>퀘스트별 완료율 그래프</button></a></p>
+        </body>
+    </html>
+    """
 
-# 사용자별 완료 퀘스트 수
-@app.get("/user_completed")
-def user_completed():
-    result = data.groupby("user_id")["completed"].sum().to_dict()
-    return result
+@app.get("/plot/user", response_class=HTMLResponse)
+def user_plot():
+    img_base64 = plot_user_completed()
+    return f'<html><body><h2>사용자별 완료 퀘스트</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
 
-# 퀘스트별 완료율 
-@app.get("/quest_completion_rate")
-def quest_completion_rate():
-    result = (data.groupby("quest")["completed"].mean() * 100).round(2).to_dict()
-    return result
+@app.get("/plot/quest", response_class=HTMLResponse)
+def quest_plot():
+    img_base64 = plot_quest_completion_rate()
+    return f'<html><body><h2>퀘스트별 완료율</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
+
+
 
 # uvicorn src.main:app --reload
