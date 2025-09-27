@@ -1,4 +1,7 @@
-# 파일: habit_analysis.py
+'''
+데이터 분석, 시각화 및 ML
+API 서버와 별개로 데이터를 로드하고 분석 결과를 터미널에 출력
+'''
 
 import pandas as pd
 import matplotlib.pyplot as plt

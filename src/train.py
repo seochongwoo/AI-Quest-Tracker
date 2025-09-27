@@ -1,3 +1,9 @@
+'''
+데이터 분석, 시각화 및 ML
+utils.py의 load_data()를 사용하여 데이터를 불러오고, completed 컬럼의 평균값을 계산
+이 평균값을 pickle 라이브러리를 사용하여 model/model.pkl 파일로 저장하여, 추후 API에서 사용하도록 준비
+'''
+
 import pickle
 from utils import load_data
 

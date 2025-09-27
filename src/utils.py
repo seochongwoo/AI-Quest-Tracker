@@ -1,3 +1,9 @@
+'''
+데이터 분석, 시각화 및 ML
+Pandas를 사용해 사용자별 완료 수나 퀘스트별 완료율 등을 계산
+Base64 문자열로 인코딩하여 main.py의 HTML 응답으로 직접 전달하는 함수
+'''
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -16,9 +22,8 @@ def get_quest_completion_rate():
     data = load_data()
     return data.groupby("quest")["completed"].mean().round(2).to_dict()
 
-# =====================
+
 # 그래프 생성 함수
-# =====================
 def plot_user_completed():
     data = load_data()
     user_completed = data.groupby('user_id')['completed'].sum()
