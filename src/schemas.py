@@ -42,6 +42,8 @@ class Quest(QuestBase):
     """퀘스트 데이터 반환 스키마"""
     id: int
     completed: bool = False
+
+    success_rate: float = 0.5
     
     class Config:
         from_attributes = True

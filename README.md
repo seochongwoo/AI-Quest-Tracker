@@ -41,10 +41,11 @@ pip install -r requirements.txt
 
 ### Running
 ```bash
-# (선택) 모델 학습 후 저장
-python src/train.py
+# 1. AI 모델 학습 (최초 1회 필수)
+# model/model.pkl 파일을 생성합니다.
+python -m src.train
 
-# FastAPI 실행
+# 2. FastAPI 실행 (서버 실행)
 uvicorn src.main:app --reload
 ```
 
@@ -57,10 +58,12 @@ uvicorn src.main:app --reload
 ###  샘플 데이터
 `data/sample_quests.csv`
 ```csv
-duration,difficulty,success
-3,2,1
-5,3,0
-2,1,1
+user_id,quest,days,completed
+1,"아침 7시 기상",3,1
+1,"물 2L 마시기",7,0
+2,"하루 30분 운동",5,1
+2,"영어 단어 10개 외우기",7,0
+3,"저녁 10시 취침",7,1
 ```
 
 ###  모델 학습
@@ -103,17 +106,12 @@ GET /predict?duration=3&difficulty=2
 
 ##  API Docs
 
-| Endpoint  | Method | Params                 | Description           |
-|-----------|--------|------------------------|-----------------------|
-| `/`       | GET    | -                      | 기본 상태 확인        |
-| `/predict`| GET    | duration(int), difficulty(int) | 퀘스트 성공 확률 예측 |
-
 ---
 
 ##  기술 스택
 - **Backend**: Python, FastAPI  
 - **ML**: scikit-learn, joblib  
-- **DB (옵션)**: SQLite / PostgreSQL  
+- **DB (옵션)**: SQLite 
 - **Visualization**: matplotlib, Plotly  
 
 ---

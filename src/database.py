@@ -2,7 +2,7 @@
 DB 관리 및 데이터 구조 정의 (백본)
 SQLAlchemy를 사용하여 SQLite 파일(db.sqlite3)과 연결하는 엔진과 세션을 생성
 '''
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -35,6 +35,7 @@ class Quest(Base):
     duration = Column(Integer)
     difficulty = Column(Integer)
     completed = Column(Boolean, default=False)
+    success_rate = Column(Float, default=0.5)
 
     user = relationship("User", back_populates="quests")
 

@@ -4,7 +4,8 @@ database.py의 모델과 schemas.py의 형식을 사용하여 실제 DB와의 �
 '''
 from sqlalchemy.orm import Session
 from .database import User, Quest # DB 모델
-from .schemas import UserCreate, QuestCreate # Pydantic 스키마
+from .schemas import UserCreate, QuestCreate 
+from . import model
 
 # User CRUD 함수
 def get_user(db: Session, user_id: int):
@@ -29,8 +30,21 @@ def create_user(db: Session, user: UserCreate):
 # Quest CRUD 함수
 def create_user_quest(db: Session, quest: QuestCreate):
     """특정 사용자(user_id)를 위한 새로운 퀘스트를 생성합니다."""
-    # **kwargs로 Pydantic 모델 데이터를 DB 모델에 전달합니다.
-    db_quest = Quest(**quest.model_dump()) 
+
+    predicted_rate = model.predict_success_rate(
+        user_id=quest.user_id,
+        duration=quest.duration,
+        difficulty=quest.difficulty
+    )
+    
+    # Pydantic 모델 데이터를 딕셔너리로 변환
+    quest_data = quest.model_dump()
+    
+    # 딕셔너리에 예측된 성공 확률 추가 
+    quest_data['success_rate'] = predicted_rate
+    
+    # DB 모델 인스턴스 생성
+    db_quest = Quest(**quest_data) 
     
     db.add(db_quest)
     db.commit()

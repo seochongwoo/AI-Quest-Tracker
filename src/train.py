@@ -17,14 +17,14 @@ def train_model():
     print("--- 1. 데이터 로드 및 전처리 시작 ---")
     data = load_data()
     
-    # ML 학습을 위한 피처(Features) 선택
     # user_id, duration, difficulty 등을 피처로 사용하고 'completed'를 예측합니다.
     # NOTE: 'quest'와 같은 문자열 데이터는 One-Hot 인코딩이 필요하지만, 여기서는 간단화를 위해 숫자 피처만 사용합니다.
-    features = ['user_id', 'duration', 'difficulty']
+    REAL_DAYS_COL = 'days'
+    features = ['user_id',  REAL_DAYS_COL]
     
     # 널(Null) 값 처리: ML 모델에 넣기 전에 결측치를 평균으로 채웁니다.
-    data['duration'].fillna(data['duration'].mean(), inplace=True)
-    data['difficulty'].fillna(data['difficulty'].mean(), inplace=True)
+    data[REAL_DAYS_COL].fillna(data[REAL_DAYS_COL].mean(), inplace=True)
+
 
     X = data[features] # 입력 피처
     y = data['completed'] # 목표 변수 (성공 여부: 0 또는 1)
@@ -56,3 +56,4 @@ if __name__ == "__main__":
         
     train_model()
 
+# python -m src.train
