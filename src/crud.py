@@ -51,9 +51,9 @@ def create_user_quest(db: Session, quest: QuestCreate):
     db.refresh(db_quest)
     return db_quest
 
-def get_quests(db: Session, user_id: int):
-    """특정 사용자의 퀘스트 목록을 조회합니다."""
-    return db.query(Quest).filter(Quest.user_id == user_id).all()
+def get_quests(db: Session, skip: int = 0, limit: int = 100):
+    """모든 퀘스트 목록을 조회합니다."""
+    return db.query(Quest).order_by(Quest.id.desc()).offset(skip).limit(limit).all()
 
 def mark_quest_complete(db: Session, quest_id: int):
     """퀘스트를 완료 상태로 변경합니다."""
