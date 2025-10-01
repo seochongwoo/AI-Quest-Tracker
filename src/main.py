@@ -38,7 +38,7 @@ def root():
             </style>
         </head>
         <body>
-            <h1>AI Quest Tracker API 준비 완료!</h1>
+            <h1>AI Quest Tracker</h1>
             <div class="section">
                 <h2>📊 데이터 시각화</h2>
                 <p><a href="/plot/user"><button>사용자별 완료 퀘스트 그래프</button></a></p>

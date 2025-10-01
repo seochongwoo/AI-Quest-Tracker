@@ -6,10 +6,15 @@ utils.py의 load_data()를 사용하여 데이터를 불러오고, completed 컬
 
 import pandas as pd
 # scikit-learn에서 로지스틱 회귀 모델과 모델 저장/로드 도구를 가져옵니다.
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from joblib import dump # 모델 저장에 pickle 대신 joblib 사용
-from src.utils import load_data # src 폴더 외부에서 내부 모듈 임포트 시 src.utils
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from joblib import dump
+from src.utils import load_data
 
 MODEL_PATH = "model/model.pkl"
 
@@ -18,35 +23,80 @@ def train_model():
     data = load_data()
     
     # user_id, duration, difficulty 등을 피처로 사용하고 'completed'를 예측합니다.
-    # NOTE: 'quest'와 같은 문자열 데이터는 One-Hot 인코딩이 필요하지만, 여기서는 간단화를 위해 숫자 피처만 사용합니다.
-    REAL_DAYS_COL = 'days'
-    features = ['user_id',  REAL_DAYS_COL]
+    DURATION_COL = 'days'
+    QUEST_NAME_COL = 'quest' 
+    features = ['user_id', DURATION_COL, QUEST_NAME_COL, 'difficulty']
+    target = 'completed'
     
+    categorical_features = [QUEST_NAME_COL]
+    numerical_features = ['user_id', DURATION_COL, 'difficulty']
     # 널(Null) 값 처리: ML 모델에 넣기 전에 결측치를 평균으로 채웁니다.
-    data[REAL_DAYS_COL].fillna(data[REAL_DAYS_COL].mean(), inplace=True)
+    numerical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='mean')),
+        ('scaler', StandardScaler())
+    ])
 
+    # ColumnTransformer를 사용하여 모든 전처리 단계를 결합합니다.
+    preprocessor = ColumnTransformer(
+        transformers=[
+            # 'quest' 컬럼에 OneHotEncoder 적용
+            ('cat', OneHotEncoder(handle_unknown='ignore'), [QUEST_NAME_COL]), 
+            # 수치형 피처에 Imputer 및 Scaler 적용
+            ('num', numerical_transformer, ['user_id', DURATION_COL, 'difficulty'])
+        ],
+        remainder='drop'
+    )
 
+    # 훈련 데이터 및 목표 변수 설정
+    if 'difficulty' not in data.columns:
+        # DB 구조에 맞추기 위해 'difficulty' 컬럼을 추가하고, 일단 평균값 3으로 채웁니다.
+        # 실제 데이터가 들어오면 이 평균이 사용됩니다.
+        data['difficulty'] = 3 
+    
     X = data[features] # 입력 피처
-    y = data['completed'] # 목표 변수 (성공 여부: 0 또는 1)
-    
-    # 훈련 세트와 테스트 세트로 분리 (모델 검증을 위해)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
+    y = data[target] # 목표 변수 (성공 여부: 0 또는 1)
+
+    # Train/Test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
     print(f"훈련 데이터 크기: {len(X_train)}, 테스트 데이터 크기: {len(X_test)}")
     
-    print("--- 2. 로지스틱 회귀 모델 학습 시작 ---")
-    # 로지스틱 회귀 모델 초기화 및 학습
-    model = LogisticRegression(solver='liblinear', random_state=42)
-    model.fit(X_train, y_train)
+    print("--- 2. 랜덤 포레스트 모델 학습 시작 ---")
     
-    # 모델 성능 평가 (선택 사항이지만 중요)
-    accuracy = model.score(X_test, y_test)
-    print(f"모델 테스트 정확도 (Accuracy): {accuracy:.2f}")
+    # 랜덤 포레스트 파이프라인
+    model = Pipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("classifier", RandomForestClassifier(
+            n_estimators=200,       # 트리 개수
+            max_depth=None,         # 제한 없음 (자동 조정)
+            random_state=42,
+            n_jobs=-1               # 병렬 처리
+        ))
+    ])
+    model.fit(X_train, y_train)
 
-    print("--- 3. 학습된 모델 저장 ---")
-    # joblib을 사용하여 모델 객체 전체를 파일로 저장
+    print("--- 3. 성능 평가 및 저장 ---")
+    
+    # 성능 평가
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    
+    acc = accuracy_score(y_test, y_pred)
+    # F1-Score는 이진 분류에서 유용합니다.
+    f1 = f1_score(y_test, y_pred, zero_division=0) 
+    # ROC-AUC는 클래스 불균형에 강한 성능 지표입니다.
+    roc = roc_auc_score(y_test, y_proba) 
+
+    print(f"✅ 정확도 (Accuracy): {acc:.2f}")
+    print(f"✅ F1 점수: {f1:.2f}")
+    print(f"✅ ROC-AUC: {roc:.2f}")
+
+    # 모델 저장
     dump(model, MODEL_PATH)
-    print(f"✅ 모델이 성공적으로 저장되었습니다: {MODEL_PATH}")
+    print(f"모델 저장 완료 → {MODEL_PATH}")
+
 
 if __name__ == "__main__":
     # model 폴더가 없으면 만들어야 합니다.
