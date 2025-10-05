@@ -55,6 +55,10 @@ def get_quests(db: Session, skip: int = 0, limit: int = 100):
     """모든 퀘스트 목록을 조회합니다."""
     return db.query(Quest).order_by(Quest.id.desc()).offset(skip).limit(limit).all()
 
+def get_quest(db: Session, quest_id: int):
+    """ID로 특정 퀘스트 조회"""
+    return db.query(Quest).filter(Quest.id == quest_id).first()
+
 def mark_quest_complete(db: Session, quest_id: int):
     """퀘스트를 완료 상태로 변경합니다."""
     db_quest = db.query(Quest).filter(Quest.id == quest_id).first()

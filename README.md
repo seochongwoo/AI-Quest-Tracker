@@ -45,7 +45,11 @@ pip install -r requirements.txt
 # model/model.pkl 파일을 생성합니다.
 python -m src.train
 
-# 2. FastAPI 실행 (서버 실행)
+# 2. DB 더미 데이터 생성 (선택)
+# db.sqlite3에 테스트용 사용자 및 퀘스트 더미 데이터를 생성합니다. (init_db() 호출 포함)
+python -m src.seed
+
+# 3. FastAPI 실행 (서버 실행)
 uvicorn src.main:app --reload
 ```
 

@@ -24,34 +24,123 @@ def get_db():
     finally:
         db.close()
 
+from fastapi.responses import HTMLResponse
+
+from fastapi.responses import HTMLResponse
+
 @app.get("/", response_class=HTMLResponse)
 def root():
     return """
     <html>
-        <head>
-            <title>AI Quest Tracker Demo</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .section { margin-bottom: 25px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
-                h1 { color: #333; }
-                
-            </style>
-        </head>
-        <body>
-            <h1>AI Quest Tracker</h1>
-            <div class="section">
+    <head>
+        <title>AI Quest Tracker</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', sans-serif;
+                background-color: #f9fafc;
+                margin: 0;
+                padding: 0;
+                text-align: center;
+                color: #222;
+            }
+            header {
+                background: linear-gradient(120deg, #02071e, #030928);
+                color: white;
+                padding: 40px 0;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            }
+            h1 { font-size: 2.2em; margin: 0; }
+            p.desc { font-size: 1.1em; color: #ddd; margin-top: 10px; }
+
+            .container {
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin: 40px auto;
+                max-width: 900px;
+            }
+
+            .card {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                width: 260px;
+                padding: 25px;
+                transition: transform 0.2s ease;
+            }
+            .card:hover {
+                transform: translateY(-5px);
+            }
+            .card h2 {
+                margin-bottom: 10px;
+                color: #02071e;
+            }
+            .card p {
+                color: #555;
+                font-size: 0.95em;
+                margin-bottom: 15px;
+            }
+            .card a {
+                display: inline-block;
+                text-decoration: none;
+                background-color: #030928;
+                color: white;
+                padding: 10px 18px;
+                border-radius: 6px;
+                transition: background-color 0.2s;
+            }
+            .card a:hover {
+                background-color: #02071e;
+            }
+            footer {
+                margin-top: 50px;
+                font-size: 0.9em;
+                color: #888;
+            }
+            footer a {
+                color: #007bff;
+                text-decoration: none;
+            }
+            footer a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>🚀 AI Quest Tracker</h1>
+            <p class="desc">습관을 쌓고, AI로 성장하세요</p>
+        </header>
+
+        <div class="container">
+            <div class="card">
+                <h2>🧭 퀘스트 관리</h2>
+                <p>퀘스트를 추가하고, 완료 여부를 관리하세요.</p>
+                <a href="/quests/list">바로가기</a>
+            </div>
+
+            <div class="card">
                 <h2>📊 데이터 시각화</h2>
-                <p><a href="/plot/user"><button>사용자별 완료 퀘스트 그래프</button></a></p>
-                <p><a href="/plot/quest"><button>퀘스트별 완료율 그래프</button></a></p>
+                <p>사용자별, 퀘스트별 완료 현황을 한눈에 확인해요.</p>
+                <a href="/plot/user">시각화 보기</a>
             </div>
-            <div class="section">
-                <h2>💻 API 및 UI</h2>
-                <p>API 테스트는 <a href="/docs">Swagger UI (/docs)</a>를 이용하세요.</p>
-                <p>실시간 데이터 확인 및 퀘스트 입력은 <a href="/quests/list"><button>실시간 퀘스트 목록 (UI)</button></a>에서.</p>
+
+            <div class="card">
+                <h2>🤖 AI 퀘스트 추천</h2>
+                <p>AI가 당신의 패턴을 학습하고 맞춤 퀘스트를 제안합니다.</p>
+                <a href="/recommend">추천받기</a>
             </div>
-        </body>
+        </div>
+
+        <footer>
+            <p>🔗 <a href="/docs">Swagger API 문서 보기</a></p>
+        </footer>
+    </body>
     </html>
     """
+
+
 
 @app.get("/plot/user", response_class=HTMLResponse)
 def user_plot():
@@ -96,144 +185,121 @@ def get_user_quests(user_id: int, db: Session = Depends(get_db)):
 # 퀘스트 목록 UI 엔드포인트
 @app.get("/quests/list", response_class=HTMLResponse)
 def list_quests_ui(db: Session = Depends(get_db)):
-    """DB에 저장된 퀘스트 목록과 AI 예측 결과를 HTML 테이블로 보여줍니다. (UI 포함)"""
-    
-    # 1. DB에서 퀘스트 목록 조회
-    quests = crud.get_quests(db, limit=50) 
-    
-    # 2. HTML 테이블 내용 생성
+    """DB에 저장된 퀘스트 목록 + CRUD UI"""
+    quests = crud.get_quests(db, limit=50)
+
     table_rows = ""
     for q in quests:
-        # success_rate 속성이 없을 경우를 대비하여 0.0을 사용
-        rate = getattr(q, 'success_rate', 0.0) 
+        rate = getattr(q, 'success_rate', 0.0)
         rate_percent = f"{rate * 100:.1f}%"
-        
-        # 완료 여부에 따라 색상을 다르게 표시
         status_color = 'green' if q.completed else 'red'
-        
-        # NOTE: table_rows는 f-string으로 깔끔하게 처리합니다.
+        toggle_label = "✅ 완료" if not q.completed else "↩️ 취소"
+
         table_rows += f"""
         <tr>
             <td>{q.id}</td>
             <td>{q.user_id}</td>
             <td>{q.name}</td>
-            <td>{q.duration}일</td>
-            <td>{q.difficulty if q.difficulty is not None else '-'}</td>
-            <td style="color: {status_color};">{'✅' if q.completed else '❌'}</td>
+            <td>{q.duration or '-'}</td>
+            <td>{q.difficulty or '-'}</td>
+            <td style='color:{status_color}'>{'완료' if q.completed else '미완료'}</td>
             <td>{rate_percent}</td>
+            <td>
+                <button onclick="toggleComplete({q.id})">{toggle_label}</button>
+                <button onclick="deleteQuest({q.id})" style="color:red;">🗑️ 삭제</button>
+            </td>
         </tr>
         """
-    
-    # 3. 전체 HTML 구조 (입력 폼 및 JavaScript 포함)
-    # 전체를 f-string으로 정의하며, HTML 내부의 중괄호는 전부 {{ }}로 이스케이프합니다.
-    html_content = f"""
+
+    html = f"""
     <html>
-        <head>
-            <title>퀘스트 목록 및 AI 예측</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                table {{ border-collapse: collapse; width: 80%; margin-top: 20px; }}
-                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                th {{ background-color: #f2f2f2; }}
-                h2 {{ color: #333; }}
-                label {{ display: inline-block; margin-top: 10px; font-weight: bold; }}
-                input[type="text"], input[type="number"] {{ padding: 8px; margin: 5px 10px 10px 0; border: 1px solid #ccc; border-radius: 4px; }}
-                button {{ cursor: pointer; }}
-            </style>
-        </head>
-        <body>
-            <h2>퀘스트 목록 및 AI 예측 결과 (최신순)</h2>
-            <a href="/"><button style="padding: 8px 15px; cursor: pointer;">메인으로 돌아가기</button></a>
-            
-            <hr style="margin: 20px 0;">
-            
-            <form id="quest-form" action="/quests/" method="post" style="padding: 15px; border: 1px solid #007bff; border-radius: 5px; background-color: #e6f7ff;">
-                <h3>✨ 새로운 퀘스트 추가</h3>
-                
-                <label for="user_id">User ID (필수):</label>
-                <input type="number" id="user_id" name="user_id" value="1" required min="1" style="width: 80px;">
-                
-                <label for="name">퀘스트 이름 (필수):</label>
-                <input type="text" id="name" name="name" required style="width: 200px;">
-                
-                <label for="duration">소요 일수 (기간):</label>
-                <input type="number" id="duration" name="duration" min="1" max="365" style="width: 80px;">
-                
-                <label for="difficulty">난이도 (1-5):</label>
-                <input type="number" id="difficulty" name="difficulty" min="1" max="5" style="width: 80px;">
-                
-                <br>
-                <button type="submit" style="margin-top: 10px; padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 5px;">
-                    퀘스트 등록 및 AI 예측 받기
-                </button>
-                <p style="color: #0056b3; font-size: small; margin-top: 10px;">등록 후 페이지가 새로고침되며 AI 예측 결과가 목록에 추가됩니다.</p>
-            </form>
-            <hr style="margin: 20px 0;">
-            
-            <table>
-                <tr>
-                    <th>ID</th>
-                    <th>User ID</th>
-                    <th>퀘스트 이름</th>
-                    <th>소요 일수</th>
-                    <th>난이도</th>
-                    <th>완료 여부</th>
-                    <th>AI 성공률</th>
-                </tr>
-                {table_rows}
-            </table>
+    <head>
+        <title>Quest Dashboard</title>
+        <style>
+            body {{ font-family: Arial; margin: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            th, td {{ border: 1px solid #ccc; padding: 8px; text-align: center; }}
+            th {{ background-color: #f0f0f0; }}
+            button {{ padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; }}
+            button:hover {{ opacity: 0.8; }}
+        </style>
+    </head>
+    <body>
+        <h2>🧭 퀘스트 관리 대시보드</h2>
+        <a href="/"><button>메인으로</button></a>
+        <form id="add-form" style="margin-top:20px;">
+            <h3>✨ 새 퀘스트 추가</h3>
+            <input type="number" name="user_id" placeholder="User ID" required min="1">
+            <input type="text" name="name" placeholder="퀘스트 이름" required>
+            <input type="number" name="duration" placeholder="소요 일수" min="1">
+            <input type="number" name="difficulty" placeholder="난이도 (1-5)" min="1" max="5">
+            <button type="submit" style="background-color:#007bff;color:white;">추가</button>
+        </form>
 
-            <script>
-                document.getElementById('quest-form').addEventListener('submit', async function(e) {{
-                    e.preventDefault(); // 기본 폼 제출 방지
+        <table>
+            <tr>
+                <th>ID</th><th>User</th><th>퀘스트</th><th>기간</th><th>난이도</th><th>상태</th><th>AI 성공률</th><th>조작</th>
+            </tr>
+            {table_rows}
+        </table>
 
-                    const form = this;
-                    const formData = new FormData(form);
-                    const data = {{}};
-                    
-                    // 폼 데이터를 JSON 객체로 변환
-                    formData.forEach((value, key) => {{
-                        // user_id, duration, difficulty는 정수로 변환 시도
-                        if (key === 'user_id' || key === 'duration' || key === 'difficulty') {{
-                            const numValue = parseInt(value);
-                            data[key] = isNaN(numValue) ? null : numValue; // 숫자가 아니면 (빈 칸) null 처리
-                        }} else {{
-                            data[key] = value;
-                        }}
-                    }});
+        <script>
+        async function toggleComplete(id) {{
+            const res = await fetch(`/quests/${{id}}/toggle`, {{ method: "PATCH" }});
+            if (res.ok) location.reload();
+            else alert("변경 실패");
+        }}
 
-                    // duration, difficulty가 null이면 제거 (스키마 Optional[int]에 맞춤)
-                    if (data.duration === null) delete data.duration;
-                    if (data.difficulty === null) delete data.difficulty;
+        async function deleteQuest(id) {{
+            if (!confirm("정말 삭제할까요?")) return;
+            const res = await fetch(`/quests/${{id}}`, {{ method: "DELETE" }});
+            if (res.ok) location.reload();
+            else alert("삭제 실패");
+        }}
 
-                    try {{
-                        const response = await fetch(form.action, {{
-                            method: form.method,
-                            headers: {{
-                                'Content-Type': 'application/json'
-                            }},
-                            body: JSON.stringify(data) // JSON 문자열로 전송
-                        }});
+        document.getElementById("add-form").addEventListener("submit", async (e) => {{
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target).entries());
+            data.user_id = parseInt(data.user_id);
+            data.duration = data.duration ? parseInt(data.duration) : null;
+            data.difficulty = data.difficulty ? parseInt(data.difficulty) : null;
 
-                        if (response.ok) {{
-                            alert("퀘스트 등록 성공! 목록을 새로고침합니다.");
-                            window.location.reload(); // 성공 시 페이지 새로고침
-                        }} else {{
-                            const error = await response.json();
-                            alert(`퀘스트 등록 실패: ${{error.detail || response.statusText}}`);
-                        }}
-                    }} catch (error) {{
-                        alert('요청 중 오류 발생: ' + error.message);
-                    }}
-                }});
-            </script>
-        </body>
+            const res = await fetch("/quests/", {{
+                method: "POST",
+                headers: {{ "Content-Type": "application/json" }},
+                body: JSON.stringify(data)
+            }});
+
+            if (res.ok) location.reload();
+            else alert("추가 실패");
+        }});
+        </script>
+    </body>
     </html>
     """
-    
-    # 이제 이스케이프된 HTML을 바로 반환합니다. 
-    # {{ }}로 이스케이프되어 f-string이 내부 중괄호를 무시하고 table_rows만 주입합니다.
-    return HTMLResponse(content=html_content)
+    return HTMLResponse(html)
+
+# 퀘스트 완료 토글 (PATCH)
+@app.patch("/quests/{quest_id}/toggle")
+def toggle_quest(quest_id: int, db: Session = Depends(get_db)):
+    quest = crud.get_quest(db, quest_id)
+    if not quest:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    quest.completed = not quest.completed
+    db.commit()
+    db.refresh(quest)
+    return {"id": quest.id, "completed": quest.completed}
+
+# 퀘스트 삭제 (DELETE)
+@app.delete("/quests/{quest_id}")
+def delete_quest(quest_id: int, db: Session = Depends(get_db)):
+    quest = crud.get_quest(db, quest_id)
+    if not quest:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    db.delete(quest)
+    db.commit()
+    return {"detail": "Deleted"}
+
 
 
 # uvicorn src.main:app --reload
