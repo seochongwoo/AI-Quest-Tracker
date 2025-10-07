@@ -3,22 +3,41 @@ FastAPI 인스턴스를 생성하고, /, /plot/user, /users/ 등 모든 API 엔�
 get_db() 함수를 통해 DB 세션을 각 요청에 주입하고, /users/ 라우트에서는 crud.py 함수를 호출하여 DB 작업을 수행
 '''
 # fast api 백엔드를 위한 import
-from fastapi import FastAPI, Depends, HTTPException 
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
+from src import crud, schemas, database
+from src.model import predict_success_rate
 # Db를 위한 import
-from .database import SessionLocal, init_db
+from .database import SessionLocal, init_db, Quest
 from . import crud, schemas
 from .utils import plot_user_completed, plot_quest_completion_rate
+from joblib import load 
+#  AI 예측 및 시간 관리를 위한 임포트 추가
+from sklearn.preprocessing import OneHotEncoder 
+import pandas as pd 
+from datetime import datetime
 
 app = FastAPI(title="AI Quest Tracker API")
+MODEL_PATH = "model/model.pkl"
 
-# 앱 인스턴스 생성 직후 호출하여 서버 시작 전에 테이블이 만들어지게 합니다.
+# 앱  생성 직후 호출하여 서버 시작 전에 테이블 생성 (버그 방지)
 init_db() 
+
+# 모델을 전역적으로 로드(서버 시작시 한번만)
+try:
+    AI_MODEL = load(MODEL_PATH)
+    print(f"AI 모델 로드 성공: {MODEL_PATH}")
+except FileNotFoundError:
+    AI_MODEL = None
+    print(f"AI 모델 파일({MODEL_PATH})을 찾을 수 없습니다. 예측 성공률은 50%로 설정됩니다.")
+except Exception as e:
+    AI_MODEL = None
+    print(f"AI 모델 로드 중 오류 발생: {e}")
 
 # DB 연결 의존성
 def get_db():
-    db = SessionLocal()
+    db = database.SessionLocal()
     try:
         yield db
     finally:
@@ -141,18 +160,21 @@ def root():
     """
 
 
+## 시각화 관련 라우트 (habit_analyis), 데이터 시각화 페이지
 
+# 예시 1
 @app.get("/plot/user", response_class=HTMLResponse)
 def user_plot():
     img_base64 = plot_user_completed()
     return f'<html><body><h2>사용자별 완료 퀘스트</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
 
+# 예시 2
 @app.get("/plot/quest", response_class=HTMLResponse)
 def quest_plot():
     img_base64 = plot_quest_completion_rate()
     return f'<html><body><h2>퀘스트별 완료율</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
 
-# DB 관련 라우트 (CRUD) 
+## DB 관련 라우트 (CRUD), 퀘스트 관리 페이지
 
 # 1. 사용자 생성 
 @app.post("/users/", response_model=schemas.User)
@@ -167,12 +189,35 @@ def get_users_endpoint(db: Session = Depends(get_db)):
 
 # 3. 퀘스트 생성 추가
 @app.post("/quests/", response_model=schemas.Quest)
-def create_quest_for_user(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
-    # user_id가 존재하는지 확인하는 로직 추가 (필수)
-    if crud.get_user(db, quest.user_id) is None:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    return crud.create_user_quest(db=db, quest=quest)
+def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
+    """
+    새로운 퀘스트 추가 (AI 성공률 자동 계산)
+    """
+    try:
+        predicted_rate = predict_success_rate(
+            quest.user_id,
+            quest.name,
+            quest.duration or 1,
+            quest.difficulty or 3
+        )
+
+        # DB에 저장
+        db_quest = crud.create_quest(
+            db=db,
+            quest_data={
+                "user_id": quest.user_id,
+                "name": quest.name,
+                "duration": quest.duration,
+                "difficulty": quest.difficulty,
+                "success_rate": predicted_rate,
+            }
+        )
+        return db_quest
+
+    except Exception as e:
+        print(f"[ERROR] 퀘스트 생성 실패: {e}")
+        raise HTTPException(status_code=400, detail="퀘스트 생성 중 오류가 발생했습니다.")
+
 
 # 4. 특정 사용자 퀘스트 조회 추가
 @app.get("/users/{user_id}/quests/", response_model=list[schemas.Quest])
@@ -185,25 +230,30 @@ def get_user_quests(user_id: int, db: Session = Depends(get_db)):
 # 퀘스트 목록 UI 엔드포인트
 @app.get("/quests/list", response_class=HTMLResponse)
 def list_quests_ui(db: Session = Depends(get_db)):
-    """DB에 저장된 퀘스트 목록 + CRUD UI"""
-    quests = crud.get_quests(db, limit=50)
+    """사용자 퀘스트 관리 대시보드 (더미 데이터 제외 + UI 개선)"""
+    quests = [q for q in crud.get_quests(db, limit=100) if q.user_id > 5]  # 더미 제외
 
     table_rows = ""
     for q in quests:
         rate = getattr(q, 'success_rate', 0.0)
         rate_percent = f"{rate * 100:.1f}%"
-        status_color = 'green' if q.completed else 'red'
+        # 성공률 색상 그라데이션
+        color = (
+            "red" if rate < 0.4 else
+            "orange" if rate < 0.7 else
+            "green"
+        )
+        status_color = 'green' if q.completed else 'gray'
         toggle_label = "✅ 완료" if not q.completed else "↩️ 취소"
 
         table_rows += f"""
         <tr>
             <td>{q.id}</td>
-            <td>{q.user_id}</td>
             <td>{q.name}</td>
             <td>{q.duration or '-'}</td>
             <td>{q.difficulty or '-'}</td>
             <td style='color:{status_color}'>{'완료' if q.completed else '미완료'}</td>
-            <td>{rate_percent}</td>
+            <td style='color:{color};font-weight:bold;'>{rate_percent}</td>
             <td>
                 <button onclick="toggleComplete({q.id})">{toggle_label}</button>
                 <button onclick="deleteQuest({q.id})" style="color:red;">🗑️ 삭제</button>
@@ -216,29 +266,99 @@ def list_quests_ui(db: Session = Depends(get_db)):
     <head>
         <title>Quest Dashboard</title>
         <style>
-            body {{ font-family: Arial; margin: 20px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-            th, td {{ border: 1px solid #ccc; padding: 8px; text-align: center; }}
-            th {{ background-color: #f0f0f0; }}
-            button {{ padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; }}
-            button:hover {{ opacity: 0.8; }}
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background-color: #f8f9fc;
+                margin: 0;
+                padding: 20px;
+            }}
+            header {{
+                background: linear-gradient(120deg, #02071e, #030928);
+                color: white;
+                padding: 15px 25px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            }}
+            header h2 {{ margin: 0; }}
+            header button {{
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 6px;
+                cursor: pointer;
+            }}
+            header button:hover {{ background-color: #0056b3; }}
+            .form-card {{
+                background: white;
+                padding: 20px;
+                margin-top: 20px;
+                border-radius: 10px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                max-width: 600px;
+                margin: 20px auto;
+            }}
+            .form-card h3 {{ margin-top: 0; }}
+            input {{
+                padding: 8px;
+                margin: 5px;
+                border-radius: 6px;
+                border: 1px solid #ccc;
+                width: 120px;
+            }}
+            button {{
+                padding: 6px 12px;
+                border-radius: 5px;
+                cursor: pointer;
+                border: none;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 30px;
+            }}
+            th, td {{
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: center;
+            }}
+            th {{
+                background-color: #f1f3f8;
+            }}
+            tr:nth-child(even) {{
+                background-color: #fafbff;
+            }}
+            tr:hover {{
+                background-color: #eef2ff;
+            }}
         </style>
     </head>
     <body>
-        <h2>🧭 퀘스트 관리 대시보드</h2>
-        <a href="/"><button>메인으로</button></a>
-        <form id="add-form" style="margin-top:20px;">
+        <header>
+            <h2>🧭 퀘스트 관리 대시보드</h2>
+            <a href="/"><button>메인으로</button></a>
+        </header>
+
+        <div class="form-card">
             <h3>✨ 새 퀘스트 추가</h3>
-            <input type="number" name="user_id" placeholder="User ID" required min="1">
-            <input type="text" name="name" placeholder="퀘스트 이름" required>
-            <input type="number" name="duration" placeholder="소요 일수" min="1">
-            <input type="number" name="difficulty" placeholder="난이도 (1-5)" min="1" max="5">
-            <button type="submit" style="background-color:#007bff;color:white;">추가</button>
-        </form>
+            <form id="add-form">
+                <input type="number" name="user_id" placeholder="User ID" required min="6">
+                <input type="text" name="name" placeholder="퀘스트 이름" required>
+                <input type="number" name="duration" placeholder="소요 일수" min="1">
+                <input type="number" name="difficulty" placeholder="난이도 (1-5)" min="1" max="5">
+                <button type="submit" style="background-color:#28a745;color:white;">추가</button>
+            </form>
+        </div>
 
         <table>
             <tr>
-                <th>ID</th><th>User</th><th>퀘스트</th><th>기간</th><th>난이도</th><th>상태</th><th>AI 성공률</th><th>조작</th>
+                <th>ID</th><th>퀘스트</th><th>기간</th><th>난이도</th>
+                <th>상태</th><th>AI 성공률</th><th>조작</th>
             </tr>
             {table_rows}
         </table>
@@ -300,6 +420,97 @@ def delete_quest(quest_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"detail": "Deleted"}
 
+## AI 퀘스트 추천 페이지
+@app.get("/recommend", response_class=HTMLResponse)
+def recommend_page():
+    return """
+    <html>
+        <head>
+            <title>AI 퀘스트 추천</title>
+            <style>
+                body { font-family: 'Segoe UI', sans-serif; text-align:center; margin-top:40px; background-color:#f8f9fa; color:#222; }
+                form { margin: 20px auto; padding: 20px; width: 400px; background: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+                input, select { width: 90%; padding: 10px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; }
+                button { padding: 10px 15px; background-color: #0078d4; color: white; border: none; border-radius: 8px; cursor: pointer; }
+                button:hover { background-color: #005fa3; }
+                .gauge-container { width: 400px; margin: 30px auto; text-align:center; }
+                .gauge-bar { height: 25px; border-radius: 10px; background-color: #e9ecef; overflow:hidden; }
+                .gauge-fill { height: 100%; background-color: #28a745; text-align:right; color:white; font-weight:bold; padding-right:8px; border-radius: 10px; }
+            </style>
+        </head>
+        <body>
+            <h1>💡 AI 퀘스트 추천</h1>
+            <p>아래 정보를 입력하면 AI가 성공 확률과 추천 난이도를 예측합니다.</p>
 
+            <form action="/recommend/result" method="post">
+                <input type="text" name="quest_name" placeholder="퀘스트 이름" required><br>
+                <input type="number" name="duration" placeholder="예상 기간 (일)" required><br>
+                <select name="difficulty">
+                    <option value="1">난이도 1 (매우 쉬움)</option>
+                    <option value="2">난이도 2</option>
+                    <option value="3" selected>난이도 3</option>
+                    <option value="4">난이도 4</option>
+                    <option value="5">난이도 5 (매우 어려움)</option>
+                </select><br>
+                <button type="submit">AI 예측 실행 🚀</button>
+            </form>
+        </body>
+    </html>
+    """
 
+@app.post("/recommend/result", response_class=HTMLResponse)
+async def recommend_result(request: Request):
+    form = await request.form()
+    quest_name = form.get("quest_name")
+    duration = int(form.get("duration"))
+    difficulty = int(form.get("difficulty"))
+    
+    # 현재 로그인 기능이 없으므로 user_id=1로 가정
+    success_rate = predict_success_rate(1, quest_name, duration, difficulty)
+    percent = round(success_rate * 100, 1)
+    
+    # 성공 확률에 따른 메시지
+    if percent >= 80:
+        message = "🔥 도전해볼 만한 목표예요!"
+    elif percent >= 60:
+        message = "💪 충분히 가능성이 있습니다!"
+    elif percent >= 40:
+        message = "⚖️ 조금 어렵지만 해볼 수 있어요."
+    else:
+        message = "💀 난이도가 높습니다. 단계를 낮춰보세요."
+    
+    # 성공 확률 게이지 색상 변경
+    if percent >= 70:
+        color = "#28a745"
+    elif percent >= 50:
+        color = "#ffc107"
+    else:
+        color = "#dc3545"
+    
+    return f"""
+    <html>
+        <head>
+            <title>AI 추천 결과</title>
+            <style>
+                body {{ font-family:'Segoe UI', sans-serif; text-align:center; background-color:#f8f9fa; margin-top:60px; }}
+                .result-box {{ background:white; width:400px; margin:0 auto; border-radius:12px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }}
+                .gauge-bar {{ height:25px; border-radius:10px; background-color:#e9ecef; overflow:hidden; margin-top:15px; }}
+                .gauge-fill {{ height:100%; background-color:{color}; width:{percent}%; text-align:right; color:white; font-weight:bold; padding-right:8px; border-radius:10px; transition:width 0.6s ease-in-out; }}
+                a {{ text-decoration:none; color:#0078d4; font-weight:bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="result-box">
+                <h2>🧠 AI 예측 결과</h2>
+                <p><b>{quest_name}</b> 퀘스트의 성공 확률은</p>
+                <div class="gauge-bar">
+                    <div class="gauge-fill">{percent}%</div>
+                </div>
+                <h3>{message}</h3>
+                <br>
+                <a href="/recommend">🔁 다시 예측하기</a> | <a href="/">🏠 홈으로</a>
+            </div>
+        </body>
+    </html>
+    """
 # uvicorn src.main:app --reload

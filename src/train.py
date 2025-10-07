@@ -24,17 +24,20 @@ def train_model():
     
     # user_id, duration, difficulty 등을 피처로 사용하고 'completed'를 예측합니다.
     DURATION_COL = 'days'
-    QUEST_NAME_COL = 'quest' 
+    QUEST_NAME_COL = 'quest'
     features = ['user_id', DURATION_COL, QUEST_NAME_COL, 'difficulty']
     target = 'completed'
     
-    categorical_features = [QUEST_NAME_COL]
     numerical_features = ['user_id', DURATION_COL, 'difficulty']
     # 널(Null) 값 처리: ML 모델에 넣기 전에 결측치를 평균으로 채웁니다.
     numerical_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='mean')),
         ('scaler', StandardScaler())
     ])
+
+    # Null 값 처리
+    data.loc[:, DURATION_COL] = data[DURATION_COL].fillna(data[DURATION_COL].mean())
+    data.loc[:, 'difficulty'] = data['difficulty'].fillna(data['difficulty'].mean())
 
     # ColumnTransformer를 사용하여 모든 전처리 단계를 결합합니다.
     preprocessor = ColumnTransformer(

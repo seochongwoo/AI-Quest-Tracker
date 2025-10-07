@@ -26,8 +26,8 @@ def load_data_from_db():
         for q in quests:
             data_list.append({
                 'user_id': q.user_id,
-                'quest': q.name,        # Quest.name -> DataFrame['quest']
-                'days': q.duration,     # Quest.duration -> DataFrame['days']
+                'quest': q.name,        
+                'days': q.duration,     
                 'difficulty': q.difficulty,
                 'completed': q.completed
             })

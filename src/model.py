@@ -3,9 +3,11 @@
 train.py가 저장한 model.pkl을 로드하고, main.py나 crud.py가 전달한 데이터를 받아 성공 확률을 예측하여 반환
 """
 
-from joblib import load
+import joblib
 import pandas as pd
 from typing import Optional
+import numpy as np
+from src.database import SessionLocal, Quest
 
 # train.py가 저장한 모델 파일 경로
 MODEL_PATH = "model/model.pkl"
@@ -17,8 +19,7 @@ def load_ml_model():
     """joblib 파일을 로드하여 전역 변수 ML_MODEL에 저장합니다."""
     global ML_MODEL
     try:
-        # joblib을 사용해 모델 로드 (scikit-learn 모델 로드)
-        ML_MODEL = load(MODEL_PATH)
+        ML_MODEL = joblib.load(MODEL_PATH)
         print("ML 모델이 성공적으로 로드되었습니다.")
         return ML_MODEL
     except FileNotFoundError:
@@ -28,28 +29,56 @@ def load_ml_model():
         print(f"모델 로드 중 오류 발생: {e}")
         return None
 
-def predict_success_rate(user_id: int, duration: Optional[int], difficulty: Optional[int]) -> float:
-    """
-    입력 피처를 사용하여 퀘스트 성공 확률 (0.0 ~ 1.0)을 예측합니다.
-    """
-    if ML_MODEL is None:
-        # 모델이 로드되지 않았으면 임시 값 반환
-        return 0.5 
+#  유틸 함수: 사용자 평균 성공률
+def get_user_success_rate(user_id: int):
+    db = SessionLocal()
+    quests = db.query(Quest).filter(Quest.user_id == user_id).all()
+    db.close()
 
-    # 1. 누락된 값 처리 (train.py의 전처리 로직과 일치해야 함)
-    # 현재는 단순하게 None이면 0 또는 임의의 값으로 처리합니다.
-    days_val = duration if duration is not None else 5  # 임의의 평균값
+    if not quests:
+        return 0.5  # 기본값 (새 사용자)
+    
+    completed = sum(1 for q in quests if q.completed)
+    return completed / len(quests)
 
-    # 2. 모델 입력 형식 (DataFrame) 생성
-    # train.py에서 사용했던 features의 순서와 이름을 정확히 맞춰야 합니다.
-    input_data = pd.DataFrame([[user_id, days_val]], 
-                              columns=['user_id', 'days'])
-    
-    # 3. 모델 예측 (확률 예측: predict_proba)
-    # [0]은 실패 확률, [1]은 성공 확률입니다. 1 (성공)의 확률을 선택합니다.
-    prediction_proba = ML_MODEL.predict_proba(input_data)[0][1]
-    
-    return float(prediction_proba)
+#  난이도 + 기간 보정
+def adjust_by_difficulty_duration(difficulty: int, duration: int):
+    diff_factor = 1 - (difficulty - 3) * 0.1   
+    dur_factor = 1 - min(duration / 100, 0.15) # 기간이 길면 15%까지 감소
+    return max(0.2, min(1.0, diff_factor * dur_factor))
+
+# ✅ 최종 예측 함수
+def predict_success_rate(user_id: int, quest_name: str, duration: int, difficulty: int) -> float:
+    """
+    난이도, 기간, 과거 사용자 성공률 기반 + ML 모델 예측값
+    """
+    try:
+        model = joblib.load(MODEL_PATH)
+    except:
+        # 모델이 없으면 기본값 반환
+        return 0.5
+
+    # AI 모델 기본 예측값 (오류 시 fallback)
+    try:
+        X = np.array([[user_id, duration, difficulty]]).astype(float)
+        model_pred = model.predict_proba(X)[0][1]
+    except Exception:
+        model_pred = 0.5
+
+    # 사용자 과거 평균 성공률
+    user_rate = get_user_success_rate(user_id)
+    # 난이도 / 기간 조정값
+    diff_dur_factor = adjust_by_difficulty_duration(difficulty, duration)
+
+    # ✅ 가중 평균으로 최종 성공률 계산
+    final_rate = (
+        0.5 * model_pred + 
+        0.3 * user_rate + 
+        0.2 * diff_dur_factor
+    )
+
+    # 확률 범위 [0,1] 보정
+    return round(float(max(0.05, min(final_rate, 0.95))), 3)
 
 # 서버 시작 시 자동으로 모델 로드
 load_ml_model()

@@ -3,8 +3,9 @@ DB 관리 및 데이터 구조 정의 (백본)
 database.py의 모델과 schemas.py의 형식을 사용하여 실제 DB와의 상호작용(생성, 읽기, 업데이트, 삭제)을 위한 함수
 '''
 from sqlalchemy.orm import Session
-from .database import User, Quest # DB 모델
+from .database import User, Quest 
 from .schemas import UserCreate, QuestCreate 
+from . import database, schemas
 from . import model
 
 # User CRUD 함수
@@ -33,6 +34,7 @@ def create_user_quest(db: Session, quest: QuestCreate):
 
     predicted_rate = model.predict_success_rate(
         user_id=quest.user_id,
+        quest_name=quest.name,
         duration=quest.duration,
         difficulty=quest.difficulty
     )
@@ -68,3 +70,13 @@ def mark_quest_complete(db: Session, quest_id: int):
         db.refresh(db_quest)
         return db_quest
     return None
+
+def create_quest(db: Session, quest_data: dict):
+    """
+    새로운 퀘스트 생성 및 DB 저장
+    """
+    db_quest = database.Quest(**quest_data)
+    db.add(db_quest)
+    db.commit()
+    db.refresh(db_quest)
+    return db_quest
