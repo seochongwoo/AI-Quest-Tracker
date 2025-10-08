@@ -3,110 +3,90 @@
 utils.py의 load_data()를 사용하여 데이터를 불러오고, completed 컬럼의 평균값을 계산
 이 평균값을 pickle 라이브러리를 사용하여 model/model.pkl 파일로 저장하여, 추후 API에서 사용하도록 준비
 '''
-
 import pandas as pd
-# scikit-learn에서 로지스틱 회귀 모델과 모델 저장/로드 도구를 가져옵니다.
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sentence_transformers import SentenceTransformer
 from joblib import dump
 from src.utils import load_data
+import numpy as np
 
 MODEL_PATH = "model/model.pkl"
 
 def train_model():
-    print("--- 1. 데이터 로드 및 전처리 시작 ---")
+    print("--- 1. 데이터 로드 및 임베딩 시작 ---")
     data = load_data()
-    
-    # user_id, duration, difficulty 등을 피처로 사용하고 'completed'를 예측합니다.
-    DURATION_COL = 'days'
-    QUEST_NAME_COL = 'quest'
-    features = ['user_id', DURATION_COL, QUEST_NAME_COL, 'difficulty']
+    expected_cols = ['user_id', 'days', 'difficulty', 'completed', 'name']
+    for c in expected_cols:
+        if c not in data.columns:
+            raise ValueError(f"누락된 컬럼: {c}")
+
+    data['user_success_rate'] = data.groupby('user_id')['completed'].transform('mean').fillna(0.5)
+
+    # SentenceTransformer 임베딩
+    embedder = SentenceTransformer('all-MiniLM-L6-v2')
+    quest_embeddings = np.vstack(data['name'].apply(lambda x: embedder.encode(str(x))).values)
+    emb_df = pd.DataFrame(quest_embeddings, columns=[f"emb_{i}" for i in range(quest_embeddings.shape[1])])
+    data = pd.concat([data.reset_index(drop=True), emb_df], axis=1)
+
+    # features: 수치형 + 임베딩
+    numeric_features = ['user_success_rate', 'days', 'difficulty']
+    embedding_features = [f"emb_{i}" for i in range(quest_embeddings.shape[1])]
+    all_features = numeric_features + embedding_features
     target = 'completed'
-    
-    numerical_features = ['user_id', DURATION_COL, 'difficulty']
-    # 널(Null) 값 처리: ML 모델에 넣기 전에 결측치를 평균으로 채웁니다.
-    numerical_transformer = Pipeline(steps=[
+
+    data = data.fillna(data.mean(numeric_only=True))
+
+    X = data[all_features]
+    y = data[target]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=42
+    )
+
+    print("--- 2. 모델 학습 시작 ---")
+    numeric_transformer = Pipeline([
         ('imputer', SimpleImputer(strategy='mean')),
         ('scaler', StandardScaler())
     ])
 
-    # Null 값 처리
-    data.loc[:, DURATION_COL] = data[DURATION_COL].fillna(data[DURATION_COL].mean())
-    data.loc[:, 'difficulty'] = data['difficulty'].fillna(data['difficulty'].mean())
+    preprocessor = ColumnTransformer([
+        ('num', numeric_transformer, numeric_features)
+    ], remainder='passthrough')
 
-    # ColumnTransformer를 사용하여 모든 전처리 단계를 결합합니다.
-    preprocessor = ColumnTransformer(
-        transformers=[
-            # 'quest' 컬럼에 OneHotEncoder 적용
-            ('cat', OneHotEncoder(handle_unknown='ignore'), [QUEST_NAME_COL]), 
-            # 수치형 피처에 Imputer 및 Scaler 적용
-            ('num', numerical_transformer, ['user_id', DURATION_COL, 'difficulty'])
-        ],
-        remainder='drop'
+    base_clf = RandomForestClassifier(
+        n_estimators=400,
+        max_depth=15,
+        class_weight='balanced',
+        random_state=42,
+        n_jobs=-1
     )
+    clf = CalibratedClassifierCV(base_clf, cv=3)
 
-    # 훈련 데이터 및 목표 변수 설정
-    if 'difficulty' not in data.columns:
-        # DB 구조에 맞추기 위해 'difficulty' 컬럼을 추가하고, 일단 평균값 3으로 채웁니다.
-        # 실제 데이터가 들어오면 이 평균이 사용됩니다.
-        data['difficulty'] = 3 
-    
-    X = data[features] # 입력 피처
-    y = data[target] # 목표 변수 (성공 여부: 0 또는 1)
-
-    # Train/Test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    print(f"훈련 데이터 크기: {len(X_train)}, 테스트 데이터 크기: {len(X_test)}")
-    
-    print("--- 2. 랜덤 포레스트 모델 학습 시작 ---")
-    
-    # 랜덤 포레스트 파이프라인
-    model = Pipeline(steps=[
-        ("preprocessor", preprocessor),
-        ("classifier", RandomForestClassifier(
-            n_estimators=200,       # 트리 개수
-            max_depth=None,         # 제한 없음 (자동 조정)
-            random_state=42,
-            n_jobs=-1               # 병렬 처리
-        ))
+    model = Pipeline([
+        ('pre', preprocessor),
+        ('clf', clf)
     ])
     model.fit(X_train, y_train)
 
-    print("--- 3. 성능 평가 및 저장 ---")
-    
-    # 성능 평가
+    print("--- 3. 성능 평가 ---")
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1]
-    
-    acc = accuracy_score(y_test, y_pred)
-    # F1-Score는 이진 분류에서 유용합니다.
-    f1 = f1_score(y_test, y_pred, zero_division=0) 
-    # ROC-AUC는 클래스 불균형에 강한 성능 지표입니다.
-    roc = roc_auc_score(y_test, y_proba) 
 
-    print(f"✅ 정확도 (Accuracy): {acc:.2f}")
-    print(f"✅ F1 점수: {f1:.2f}")
-    print(f"✅ ROC-AUC: {roc:.2f}")
+    print(f"✅ 정확도: {accuracy_score(y_test, y_pred):.3f}")
+    print(f"✅ F1: {f1_score(y_test, y_pred):.3f}")
+    print(f"✅ ROC-AUC: {roc_auc_score(y_test, y_proba):.3f}")
 
-    # 모델 저장
-    dump(model, MODEL_PATH)
+    dump((model, embedder), MODEL_PATH)
     print(f"모델 저장 완료 → {MODEL_PATH}")
 
-
 if __name__ == "__main__":
-    # model 폴더가 없으면 만들어야 합니다.
-    import os
-    if not os.path.exists('model'):
-        os.makedirs('model')
-        
     train_model()
 
 # python -m src.train

@@ -26,7 +26,7 @@ def load_data_from_db():
         for q in quests:
             data_list.append({
                 'user_id': q.user_id,
-                'quest': q.name,        
+                'name': q.name,        
                 'days': q.duration,     
                 'difficulty': q.difficulty,
                 'completed': q.completed

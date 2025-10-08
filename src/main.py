@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
-from src.model import predict_success_rate
+from src.model import predict_success_rate_text as predict_success_rate
 # Db를 위한 import
 from .database import SessionLocal, init_db, Quest
 from . import crud, schemas
@@ -146,7 +146,7 @@ def root():
             </div>
 
             <div class="card">
-                <h2>🤖 AI 퀘스트 추천</h2>
+                <h2>💡 AI 퀘스트 추천</h2>
                 <p>AI가 당신의 패턴을 학습하고 맞춤 퀘스트를 제안합니다.</p>
                 <a href="/recommend">추천받기</a>
             </div>
