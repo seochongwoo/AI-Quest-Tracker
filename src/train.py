@@ -4,89 +4,88 @@ utils.py의 load_data()를 사용하여 데이터를 불러오고, completed 컬
 이 평균값을 pickle 라이브러리를 사용하여 model/model.pkl 파일로 저장하여, 추후 API에서 사용하도록 준비
 '''
 import pandas as pd
+import joblib
+import numpy as np
+from sentence_transformers import SentenceTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-from sentence_transformers import SentenceTransformer
-from joblib import dump
+from sklearn.impute import SimpleImputer
 from src.utils import load_data
-import numpy as np
+from src.database import init_db
 
 MODEL_PATH = "model/model.pkl"
 
 def train_model():
     print("--- 1. 데이터 로드 및 임베딩 시작 ---")
-    data = load_data()
-    expected_cols = ['user_id', 'days', 'difficulty', 'completed', 'name']
-    for c in expected_cols:
-        if c not in data.columns:
+    df = load_data()
+    if df.empty:
+        raise ValueError("데이터셋이 비어 있습니다. seed.py를 먼저 실행하세요.")
+
+    # 누락 컬럼 확인
+    required = ["name", "days", "difficulty", "completed"]
+    for c in required:
+        if c not in df.columns:
             raise ValueError(f"누락된 컬럼: {c}")
 
-    data['user_success_rate'] = data.groupby('user_id')['completed'].transform('mean').fillna(0.5)
+    # 한국어 멀티언어 임베딩 모델
+    embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-    # SentenceTransformer 임베딩
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-    quest_embeddings = np.vstack(data['name'].apply(lambda x: embedder.encode(str(x))).values)
-    emb_df = pd.DataFrame(quest_embeddings, columns=[f"emb_{i}" for i in range(quest_embeddings.shape[1])])
-    data = pd.concat([data.reset_index(drop=True), emb_df], axis=1)
+    # quest 컬럼 임베딩 (한국어 의미 반영)
+    print("임베딩 생성 중 (한국어 포함)...")
+    embeddings = embedder.encode(df["name"].astype(str).tolist(), show_progress_bar=True)
+    emb_df = pd.DataFrame(embeddings, columns=[f"emb_{i}" for i in range(embeddings.shape[1])])
+    df = pd.concat([df.reset_index(drop=True), emb_df], axis=1)
+    df = df.drop(columns=["name"], errors="ignore")
 
-    # features: 수치형 + 임베딩
-    numeric_features = ['user_success_rate', 'days', 'difficulty']
-    embedding_features = [f"emb_{i}" for i in range(quest_embeddings.shape[1])]
-    all_features = numeric_features + embedding_features
-    target = 'completed'
+    # 훈련용 입력과 출력
+    X = df.drop(columns=["completed"])
+    y = df["completed"]
 
-    data = data.fillna(data.mean(numeric_only=True))
+    # 데이터 분리
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    X = data[all_features]
-    y = data[target]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42
+    # 수치형 컬럼 처리
+    num_cols = ["days", "difficulty"]
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="mean")),
+                ("scaler", StandardScaler())
+            ]), num_cols)
+        ],
+        remainder="passthrough"
     )
 
-    print("--- 2. 모델 학습 시작 ---")
-    numeric_transformer = Pipeline([
-        ('imputer', SimpleImputer(strategy='mean')),
-        ('scaler', StandardScaler())
-    ])
-
-    preprocessor = ColumnTransformer([
-        ('num', numeric_transformer, numeric_features)
-    ], remainder='passthrough')
-
-    base_clf = RandomForestClassifier(
+    # 모델 구성 (RandomForest + 확률 보정)
+    rf = RandomForestClassifier(
         n_estimators=400,
         max_depth=15,
-        class_weight='balanced',
-        random_state=42,
-        n_jobs=-1
+        class_weight="balanced",
+        n_jobs=-1,
+        random_state=42
     )
-    clf = CalibratedClassifierCV(base_clf, cv=3)
 
     model = Pipeline([
-        ('pre', preprocessor),
-        ('clf', clf)
+        ("pre", preprocessor),
+        ("clf", CalibratedClassifierCV(rf, cv=3))
     ])
+
+    print("--- 2. 모델 학습 중 ---")
     model.fit(X_train, y_train)
 
-    print("--- 3. 성능 평가 ---")
-    y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)[:, 1]
+    score = model.score(X_test, y_test)
+    print(f"✅ 모델 학습 완료. 테스트 정확도: {score:.3f}")
 
-    print(f"✅ 정확도: {accuracy_score(y_test, y_pred):.3f}")
-    print(f"✅ F1: {f1_score(y_test, y_pred):.3f}")
-    print(f"✅ ROC-AUC: {roc_auc_score(y_test, y_proba):.3f}")
-
-    dump((model, embedder), MODEL_PATH)
-    print(f"모델 저장 완료 → {MODEL_PATH}")
+    print("--- 3. 모델 저장 중 ---")
+    joblib.dump((model, embedder), MODEL_PATH)
+    print(f"✅ 모델 저장 완료: {MODEL_PATH}")
 
 if __name__ == "__main__":
+    init_db()
     train_model()
 
 # python -m src.train

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
-from src.model import predict_success_rate_text as predict_success_rate
+from . import crud, schemas, model
 # Db를 위한 import
 from .database import SessionLocal, init_db, Quest
 from . import crud, schemas
@@ -25,15 +25,7 @@ MODEL_PATH = "model/model.pkl"
 init_db() 
 
 # 모델을 전역적으로 로드(서버 시작시 한번만)
-try:
-    AI_MODEL = load(MODEL_PATH)
-    print(f"AI 모델 로드 성공: {MODEL_PATH}")
-except FileNotFoundError:
-    AI_MODEL = None
-    print(f"AI 모델 파일({MODEL_PATH})을 찾을 수 없습니다. 예측 성공률은 50%로 설정됩니다.")
-except Exception as e:
-    AI_MODEL = None
-    print(f"AI 모델 로드 중 오류 발생: {e}")
+model.load_ml_model()
 
 # DB 연결 의존성
 def get_db():
@@ -194,7 +186,7 @@ def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
     새로운 퀘스트 추가 (AI 성공률 자동 계산)
     """
     try:
-        predicted_rate = predict_success_rate(
+        predicted_rate = model.predict_success_rate(
             quest.user_id,
             quest.name,
             quest.duration or 1,
@@ -466,7 +458,7 @@ async def recommend_result(request: Request):
     difficulty = int(form.get("difficulty"))
     
     # 현재 로그인 기능이 없으므로 user_id=1로 가정
-    success_rate = predict_success_rate(1, quest_name, duration, difficulty)
+    success_rate = model.predict_success_rate(1, quest_name, duration, difficulty)
     percent = round(success_rate * 100, 1)
     
     # 성공 확률에 따른 메시지
