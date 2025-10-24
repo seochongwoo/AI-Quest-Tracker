@@ -21,6 +21,9 @@ class User(Base):
     name = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
+    # 성향 점수
+    consistency_score = Column(Integer, default=3)
+    risk_aversion_score = Column(Integer, default=3)
 
     quests = relationship("Quest", back_populates="user", cascade="all, delete")
 

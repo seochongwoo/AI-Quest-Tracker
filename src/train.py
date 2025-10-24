@@ -25,45 +25,51 @@ def train_model():
     if df.empty:
         raise ValueError("데이터셋이 비어 있습니다. seed.py를 먼저 실행하세요.")
 
-    # 누락 컬럼 확인
-    required = ["name", "days", "difficulty", "completed"]
-    for c in required:
-        if c not in df.columns:
-            raise ValueError(f"누락된 컬럼: {c}")
+    required = ["difficulty", "completed"]
+    if "name" not in df.columns:
+        if "quest_name" in df.columns:
+            df.rename(columns={"quest_name": "name"}, inplace=True)
+        else:
+            df["name"] = "Unknown"
 
-    # 한국어 멀티언어 임베딩 모델
+    if "days" not in df.columns:
+        if "duration" in df.columns:
+            df.rename(columns={"duration": "days"}, inplace=True)
+
     embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-    # quest 컬럼 임베딩 (한국어 의미 반영)
     print("임베딩 생성 중 (한국어 포함)...")
-    embeddings = embedder.encode(df["name"].astype(str).tolist(), show_progress_bar=True)
+    text_features = df["name"].astype(str) + " " + df.get("motivation", "")
+    embeddings = embedder.encode(text_features.tolist(), show_progress_bar=True)
     emb_df = pd.DataFrame(embeddings, columns=[f"emb_{i}" for i in range(embeddings.shape[1])])
     df = pd.concat([df.reset_index(drop=True), emb_df], axis=1)
     df = df.drop(columns=["name"], errors="ignore")
 
-    # 훈련용 입력과 출력
+    # feature 다양화: success_rate, category 추가
+    if "success_rate" in df.columns:
+        df["success_rate"] = df["success_rate"].fillna(df["success_rate"].mean())
+    if "category" in df.columns:
+        df = pd.get_dummies(df, columns=["category"], drop_first=True)
+
     X = df.drop(columns=["completed"])
     y = df["completed"]
 
-    # 데이터 분리
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
-    # 수치형 컬럼 처리
-    num_cols = ["days", "difficulty"]
+    num_cols = ["days", "difficulty", "success_rate"]
     preprocessor = ColumnTransformer(
         transformers=[
             ("num", Pipeline(steps=[
                 ("imputer", SimpleImputer(strategy="mean")),
                 ("scaler", StandardScaler())
-            ]), num_cols)
+            ]), [c for c in num_cols if c in X.columns])
         ],
         remainder="passthrough"
     )
 
-    # 모델 구성 (RandomForest + 확률 보정)
     rf = RandomForestClassifier(
-        n_estimators=400,
-        max_depth=15,
+        n_estimators=500,
+        max_depth=18,
         class_weight="balanced",
         n_jobs=-1,
         random_state=42
@@ -76,7 +82,6 @@ def train_model():
 
     print("--- 2. 모델 학습 중 ---")
     model.fit(X_train, y_train)
-
     score = model.score(X_test, y_test)
     print(f"✅ 모델 학습 완료. 테스트 정확도: {score:.3f}")
 

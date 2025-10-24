@@ -68,11 +68,11 @@ def calculate_success_rate(db, user_id, duration, difficulty, category, user_bia
     difficulty = int(max(1, min(5, difficulty)))
     dist_mean, dist_sd = DIFFICULTY_DIST[difficulty]
 
-    # 4. raw 평균 계산 (카테고리 영향 30%, 난이도 영향 70%)
-    raw_mean = 0.7 * dist_mean + 0.3 * cat_base
+    # 4. raw 평균 계산 (카테고리 영향 40%, 난이도 영향 60%)
+    raw_mean = 0.6 * dist_mean + 0.4 * cat_base
 
     # 5. 기간 패널티 (길면 더 어렵다)
-    duration_penalty = 0.005 * min(duration, 60)  # 최대 -0.3
+    duration_penalty = 0.006 * min(duration, 60)  # 최대 -0.3
     raw_mean -= duration_penalty
 
     # 6. 정규분포 샘플링
@@ -83,10 +83,10 @@ def calculate_success_rate(db, user_id, duration, difficulty, category, user_bia
 
     # 8. 최종 조합 (difficulty 효과를 강화)
     final = (
-        0.2 * user_rate +
-        0.65 * sampled +
-        0.1 * user_bias +
-        0.05 * random.uniform(-0.05, 0.05)
+        0.15 * user_rate +
+        0.7 * sampled +
+        0.12 * user_bias +
+        0.03 * random.uniform(-0.05, 0.05)
     )
 
     # 9. 안전 범위 클램프

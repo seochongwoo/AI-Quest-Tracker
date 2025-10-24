@@ -13,15 +13,26 @@ class UserBase(BaseModel):
     email: str
 
 class UserCreate(UserBase):
-    pass
+    email: Optional[str] = Field("dummy@user.com", description="Simple login을 위한 더미 이메일")
+    
+    # 온보딩 질문에서 받을 성향 점수
+    consistency_score: Optional[int] = Field(3, ge=1, le=5)
+    risk_aversion_score: Optional[int] = Field(3, ge=1, le=5)
 
 class User(UserBase):
     id: int
     is_active: bool = True
 
+    consistency_score: int
+    risk_aversion_score: int
+
     class Config:
         from_attributes = True
 
+# 성향 점수 업데이트를 위한 스키마
+class UserUpdateScores(BaseModel):
+    consistency_score: int = Field(..., ge=1, le=5)
+    risk_aversion_score: int = Field(..., ge=1, le=5)
 
 # ---------- Quest ----------
 class QuestBase(BaseModel):

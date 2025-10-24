@@ -4,7 +4,7 @@ database.py의 모델과 schemas.py의 형식을 사용하여 실제 DB와의 �
 '''
 from sqlalchemy.orm import Session
 from .database import User, Quest 
-from .schemas import UserCreate, QuestCreate 
+from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
 
 # User CRUD 함수
@@ -51,6 +51,17 @@ def create_user_quest(db: Session, quest: QuestCreate):
 def get_quests(db: Session, skip: int = 0, limit: int = 100):
     return db.query(Quest).order_by(Quest.id.desc()).offset(skip).limit(limit).all()
 
+# 특정 사용자 ID의 퀘스트 목록을 최신 순으로 조회합니다.
+def get_quests_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
+    return (
+        db.query(Quest)
+        .filter(Quest.user_id == user_id)
+        .order_by(Quest.id.desc()) # 최신 퀘스트가 위에 오도록 정렬
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
 # ID로 퀘스트 조회
 def get_quest(db: Session, quest_id: int):
     return db.query(Quest).filter(Quest.id == quest_id).first()
@@ -75,3 +86,28 @@ def create_quest(db: Session, quest_data: dict):
     db.commit()
     db.refresh(db_quest)
     return db_quest
+
+# 간단한 로그인 기능
+def get_user_by_name(db: Session, name: str):
+    return db.query(User).filter(User.name == name).first()
+
+def create_simple_user(db: Session, name: str):
+    user = User(name=name, email=f"{name}@auto.local")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+# 이름으로 유저 찾기 함수
+def get_user_by_name(db: Session, name: str):
+    return db.query(User).filter(User.name == name).first()
+
+# 성향 점수 업데이트 함수
+def update_user_scores(db: Session, user_id: int, scores: UserUpdateScores):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if db_user:
+        db_user.consistency_score = scores.consistency_score
+        db_user.risk_aversion_score = scores.risk_aversion_score
+        db.commit()
+        db.refresh(db_user)
+    return db_user
