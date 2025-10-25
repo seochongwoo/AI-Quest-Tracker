@@ -43,6 +43,7 @@ def get_current_user_id(request: Request):
     # 로그인 안 되어 있으면 None 반환
     return None
 
+# -----로그인 관련-----
 # 로그인 페이지
 @app.get("/login", response_class=HTMLResponse)
 def login_page():
@@ -107,7 +108,7 @@ def logout():
     return response
 
 
-# 💡 신규: 온보딩 질문 페이지 (성향 점수 수집)
+# 온보딩 질문 페이지 (성향 점수 수집)
 @app.get("/onboarding", response_class=HTMLResponse)
 def onboarding_page(user_id: int = Depends(get_current_user_id)):
     if not user_id:
@@ -152,7 +153,7 @@ def onboarding_page(user_id: int = Depends(get_current_user_id)):
     </html>
     """
 
-# 💡 신규: 온보딩 질문 답변 처리 (성향 점수 DB 업데이트)
+# 온보딩 질문 답변 처리 (성향 점수 DB 업데이트)
 @app.post("/onboarding")
 async def process_onboarding(
     user_id: int = Form(...),
@@ -176,7 +177,7 @@ async def process_onboarding(
     response = RedirectResponse(url="/", status_code=303)
     return response
 
-# 메인 페이지
+# -----메인 페이지------
 @app.get("/", response_class=HTMLResponse)
 # 💡 FIX: db 의존성 주입 (FastAPI의 Depends 사용)
 def root(request: Request, db: Session = Depends(get_db)): 
@@ -342,7 +343,8 @@ def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)
 def get_users_endpoint(db: Session = Depends(get_db)):
     return crud.get_users(db=db, skip=0, limit=100) # limit 추가
 
-# 3. 퀘스트 생성 추가
+# -----퀘스트 관련----- 
+# 퀘스트 생성 추가
 @app.post("/quests/", response_model=schemas.Quest)
 def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
     """
@@ -362,8 +364,10 @@ def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
             quest_data={
                 "user_id": quest.user_id,
                 "name": quest.name,
+                "category": quest.category,
                 "duration": quest.duration,
                 "difficulty": quest.difficulty,
+                "motivation": quest.motivation,
                 "success_rate": predicted_rate,
             }
         )
@@ -374,7 +378,7 @@ def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="퀘스트 생성 중 오류가 발생했습니다.")
 
 
-# 4. 특정 사용자 퀘스트 조회 추가
+# 특정 사용자 퀘스트 조회 추가
 @app.get("/users/{user_id}/quests/", response_model=list[schemas.Quest])
 def get_user_quests(user_id: int, db: Session = Depends(get_db)):
     quests = crud.get_quests(db=db, user_id=user_id)
@@ -407,7 +411,6 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             ai_info_text = "AI 추천" if quest.ai_recommended else "직접 등록"
             success_rate_percent = f"{quest.success_rate * 100:.1f}%" if quest.success_rate is not None else "N/A"
             
-            # data-item-id 속성은 Python의 f-string 포맷팅으로 퀘스트 ID를 포함합니다.
             quest_list_html += f"""
             <div class="quest-item {status_class}">
                 <div class="quest-info">
@@ -596,19 +599,19 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             data.name = data.name || data.category;
             data.duration = data.duration ? parseInt(data.duration) : null;
             data.difficulty = data.difficulty ? parseInt(data.difficulty) : null;
-            data.motivation = data.motivation || null; 
+            data.motivation = data.motivation || null;
 
             const res = await fetch("/quests/", {{
                 method: "POST",
                 headers: {{ "Content-Type": "application/json" }},
-                body: JSON.stringify(data)
+                body: JSON.stringify(data),
+                credentials: "include"
             }});
 
             if (res.ok) {{
                 alert("퀘스트가 성공적으로 등록되었습니다. AI 예측 성공률을 확인해 보세요!");
                 location.reload();
-            }}
-            else {{
+            }} else {{
                 const errorData = await res.json();
                 alert("퀘스트 추가 실패: " + (errorData.detail || "서버 오류"));
             }}
@@ -617,7 +620,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
         // 퀘스트 상태 토글 처리 (PATCH /quests/{{quest_id}}/toggle)
         document.querySelectorAll('.toggle-btn').forEach(button => {{
             button.addEventListener('click', async (e) => {{
-                const itemId = e.currentTarget.getAttribute('data-item-id'); 
+                const itemId = e.currentTarget.getAttribute('data-item-id');
                 
                 if (!itemId) {{
                     console.error("Error: item ID is missing for toggle.");
@@ -625,12 +628,17 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
                     return;
                 }}
 
+                const res = await fetch(`/quests/${{itemId}}/toggle`, {{
+                    method: "PATCH",
+                    credentials: "include"
+                }});
+
                 if (res.ok) location.reload();
                 else alert("상태 변경 실패");
             }});
         }});
-        
-        // 퀘스트 삭제 처리 (DELETE /quests/{{quest_id}})
+
+        //퀘스트 삭제 처리 (DELETE /quests/{{quest_id}})
         document.querySelectorAll('.delete-btn').forEach(button => {{
             button.addEventListener('click', async (e) => {{
                 if (!confirm("정말로 이 퀘스트를 삭제하시겠습니까?")) return;
@@ -643,11 +651,16 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
                     return;
                 }}
 
+                const res = await fetch(`/quests/${{itemId}}`, {{
+                    method: "DELETE",
+                    credentials: "include"
+                }});
+
                 if (res.ok) location.reload();
                 else alert("삭제 실패");
             }});
         }});
-        </script>
+    </script>
     </body>
     </html>
     """
@@ -655,10 +668,15 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
 
 # 퀘스트 완료 토글 (PATCH)
 @app.patch("/quests/{quest_id}/toggle")
-def toggle_quest(quest_id: int, db: Session = Depends(get_db)):
-    quest = crud.get_quest(db, quest_id)
+def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+
+    quest = crud.get_quest_by_user(db, quest_id, int(user_id))
     if not quest:
-        raise HTTPException(status_code=404, detail="Quest not found")
+        raise HTTPException(status_code=404, detail="Quest not found or not yours")
+
     quest.completed = not quest.completed
     db.commit()
     db.refresh(quest)
@@ -666,15 +684,21 @@ def toggle_quest(quest_id: int, db: Session = Depends(get_db)):
 
 # 퀘스트 삭제 (DELETE)
 @app.delete("/quests/{quest_id}")
-def delete_quest(quest_id: int, db: Session = Depends(get_db)):
-    quest = crud.get_quest(db, quest_id)
+def delete_quest(quest_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+
+    quest = crud.get_quest_by_user(db, quest_id, int(user_id))
     if not quest:
-        raise HTTPException(status_code=404, detail="Quest not found")
+        raise HTTPException(status_code=404, detail="Quest not found or not yours")
+
     db.delete(quest)
     db.commit()
     return {"detail": "Deleted"}
 
-## AI 퀘스트 추천 페이지
+#-----recommend 페이지-----
+# AI 퀘스트 추천 페이지
 @app.get("/recommend", response_class=HTMLResponse)
 def recommend_page():
     return """
@@ -714,13 +738,24 @@ def recommend_page():
 
 @app.post("/recommend/result", response_class=HTMLResponse)
 async def recommend_result(request: Request):
+    user_id_str = request.cookies.get("user_id")
+    if not user_id_str:
+        # 로그인 쿠키가 없으면 로그인 페이지로 리디렉션 (로그인 강제)
+        return RedirectResponse(url="/login", status_code=303)
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
+        # user_id 값이 유효한 정수가 아닌 경우 (쿠키 변조 등)
+        return RedirectResponse(url="/login", status_code=303)
+
     form = await request.form()
     quest_name = form.get("quest_name")
     duration = int(form.get("duration"))
     difficulty = int(form.get("difficulty"))
     
+    
     # 현재 로그인 기능이 없으므로 user_id=1로 가정
-    success_rate = model.predict_success_rate(1, quest_name, duration, difficulty)
+    success_rate = model.predict_success_rate(user_id, quest_name, duration, difficulty)
     percent = round(success_rate * 100, 1)
     
     # 성공 확률에 따른 메시지

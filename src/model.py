@@ -53,7 +53,7 @@ def load_ml_model():
         return None
 
 # crud.py가 호출하는 표준 함수 이름(predict_success_rate)으로 변경
-def predict_success_rate(user_id: int, quest_name: str, duration: int, difficulty: int):
+def predict_success_rate(user_id: int, quest_name: str, duration: Optional[int], difficulty: Optional[int], category: Optional[str] = None):
     """
     quest_name (한국어 포함)을 받아 의미 기반 임베딩 후 성공 확률을 예측합니다.
     """
@@ -74,9 +74,16 @@ def predict_success_rate(user_id: int, quest_name: str, duration: int, difficult
     row = {
         "user_id": user_id,
         "user_success_rate": user_rate,
-        "days": duration,
-        "difficulty": difficulty
+        "days": duration or 0,
+        "difficulty": difficulty or 1,
+        "success_rate": user_rate,
+        "category_" + (category or "general"): 1
     }
+
+    for c in ["health", "study", "exercise", "reading", "work", "hobby", "general"]:
+        if "category_" + c not in row:
+            row["category_" + c] = 0
+
     for i, v in enumerate(emb):
         row[f"emb_{i}"] = v
 

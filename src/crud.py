@@ -51,12 +51,18 @@ def create_user_quest(db: Session, quest: QuestCreate):
 def get_quests(db: Session, skip: int = 0, limit: int = 100):
     return db.query(Quest).order_by(Quest.id.desc()).offset(skip).limit(limit).all()
 
-# 특정 사용자 ID의 퀘스트 목록을 최신 순으로 조회합니다.
+# 특정 사용자 ID의 퀘스트 목록을 최신 순으로 조회 (토글/삭제용)
+def get_quest_by_user(db: Session, quest_id: int, user_id: int):
+    return db.query(Quest).filter(
+        Quest.id == quest_id,
+        Quest.user_id == user_id
+    ).first()
+
+# 특정 유저의 모든 퀘스트 목록 (대시보드/목록용)
 def get_quests_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     return (
         db.query(Quest)
         .filter(Quest.user_id == user_id)
-        .order_by(Quest.id.desc()) # 최신 퀘스트가 위에 오도록 정렬
         .offset(skip)
         .limit(limit)
         .all()
