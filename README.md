@@ -2,7 +2,7 @@
 
 # 🌟 AI Quest Tracker
 
-- **AI Quest Tracker**는 오픈소스 habit tracker를 기반으로, **머신러닝을 활용해 퀘스트(습관) 성공 확률을 예측**하고, **맞춤형 퀘스트를 추천**하며, 간단한 **AI 피드백**을 제공하는 프로젝트입니다. 
+- **AI Quest Tracker**는 오픈소스 habit tracker에서 영감을 받아, **머신러닝을 활용해 퀘스트(습관) 성공 확률을 예측**하고, **맞춤형 퀘스트를 추천**하며, 간단한 **AI 피드백**을 제공하는 프로젝트입니다. 
 - 사용자는 자신이 원하는 퀘스트를 추가하고, 실행 결과를 기록하며, AI로부터 동기부여와 피드백을 받을 수 있습니다.
 - [Habitica](https://habitica.com/)와 같은 habit tracker에서 영감을 받았으며, **데이터 기반 개인화**를 주요 목표로 합니다.
 
@@ -41,17 +41,15 @@ pip install -r requirements.txt
 
 ### Running
 ```bash
-# 1. DB 더미 데이터 생성 (매우 권장)
-# db.sqlite3에 테스트용 사용자 및 퀘스트 더미 데이터를 생성합니다. (init_db() 호출 포함)
-# 실행하지 않는다면 초반에 예측 확률이 매우 낮아집니다!
-python -m src.seed
-
-# 2. AI 모델 학습 (최초 1회 필수)
+# 1. AI 모델 학습 (최초 1회 필수)
 # model/model.pkl 파일을 생성합니다.
 python -m src.train
 
-# 3. FastAPI 실행 (서버 실행)
+# 2. FastAPI 실행 (서버 실행)
 uvicorn src.main:app --reload
+
+# 3. 퀘스트 완료 혹은 삭제 후 train.py 다시 실행!
+python -m src.train
 ```
 
 - 실행 후: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) 접속하면 Swagger UI에서 API 확인 가능 ✅
@@ -62,40 +60,43 @@ uvicorn src.main:app --reload
 
 ###  샘플 데이터
 `seed.py`로 더미데이터 생성
+- 데이터베이스에 저장되는 레코드 예시
 ```csv
-user_id,quest,days,completed
-1,"아침 7시 기상",3,1
-1,"물 2L 마시기",7,0
-2,"하루 30분 운동",5,1
-2,"영어 단어 10개 외우기",7,0
-3,"저녁 10시 취침",7,1
+user_id, name, category, duration, difficulty, completed, ...
+1,"퀘스트_1_health","health",7,3,1
+1,"퀘스트_2_study","study",3,5,0
+2,"퀘스트_1_exercise","exercise",10,2,1
 ```
 
 ###  모델 학습
 `src/train.py`  
-- `scikit-learn`으로 간단한 로지스틱 회귀 모델 학습  
-- 학습된 모델을 `model/model.pkl`로 저장  
-
+- 랜덤 포레스트 기반 분류 모델 학습 및 보정(CalibratedClassifierCV) 적용
+- 퀘스트 이름(name)을 SentenceTransformer로 임베딩하여 모델 피처에 사용
+-  사용자별 완료율(user_success_rate), 기간(days), 난이도(difficulty) 등을 피처로 활용하여 성공 여부(completed) 예측
+- 학습된 모델과 임베딩 객체를 포함한 튜플을 model/model.pkl로 저장
 ```python
-joblib.dump(model, "model/model.pkl")
+# train.py에서 모델과 임베더 객체를 함께 저장합니다.
+dump((model, embedder), MODEL_PATH)
 ```
+
 
 ###  API 실행
 `src/main.py`  
-- FastAPI 서버 구동  
-- `/predict` 엔드포인트 제공  
-
-```http
-GET /predict?duration=3&difficulty=2
-```
+- FastAPI 서버 구동 시 model.py를 통해 model/model.pkl에서 학습된 모델을 로드합니다.
+- /quests/list: 사용자별 퀘스트 목록 및 상태 토글/삭제 기능 제공
+- /recommend/result: 사용자의 로그인 ID를 기반으로 맞춤형 성공률 예측
+- /quests/ (POST): 퀘스트 생성 시 AI 모델을 통해 성공률을 예측하여 DB에 저장
 
 ### 예측 결과
-```json
-{
-  "duration": 3,
-  "difficulty": 2,
-  "success_prob": 0.74
-}
+```python
+# model.py의 predict_success_rate 함수 호출
+predicted_rate = predict_success_rate(
+    user_id=user_id,
+    quest_name="매일 30분 운동",  # 예측할 퀘스트 이름
+    duration=7,                  # 예상 기간 (일)
+    difficulty=4                 # 난이도 (1~5)
+)
+# 반환 값은 0.0 ~ 1.0 사이의 성공 확률
 ```
 
 ---
@@ -115,9 +116,9 @@ GET /predict?duration=3&difficulty=2
 
 ##  기술 스택
 - **Backend**: Python, FastAPI  
-- **ML**: scikit-learn, joblib  
-- **DB (옵션)**: SQLite 
-- **Visualization**: matplotlib, Plotly  
+- **ML**: scikit-learn (RandomForest, CalibratedClassifierCV), joblib, SentenceTransformer 
+- **DB**: SQLAlchemy
+- **Visualization**: matplotlib, Plotly, HTML/CSS Gauge Bar
 
 ---
 
@@ -125,7 +126,7 @@ GET /predict?duration=3&difficulty=2
 - [Habitica](https://habitica.com/)  
 - [Scikit-learn Documentation](https://scikit-learn.org/stable/)  
 - [FastAPI](https://fastapi.tiangolo.com/)  
-
+- Sentence Transformers (텍스트 임베딩)
 ---
 
 ##  License
