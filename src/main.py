@@ -11,12 +11,12 @@ from . import crud, schemas, model
 # Db를 위한 import
 from .database import SessionLocal, init_db, Quest
 from . import crud, schemas
-from .utils import plot_user_completed, plot_quest_completion_rate
-from joblib import load 
 #  AI 예측 및 시간 관리를 위한 임포트 추가
 from sklearn.preprocessing import OneHotEncoder 
 import pandas as pd 
 from datetime import datetime
+# 시각화를 위한 import
+from .habit_analysis import plot_user_progress,plot_success_rate_by_category, plot_focus_area, plot_growth_trend
 
 app = FastAPI(title="AI Quest Tracker API")
 MODEL_PATH = "model/model.pkl"
@@ -299,7 +299,7 @@ def root(request: Request, db: Session = Depends(get_db)):
             <div class="card">
                 <h2>📊 데이터 시각화</h2>
                 <p>사용자별, 퀘스트별 완료 현황을 한눈에 확인해요.</p>
-                <a href="/plot/user">시각화 보기</a>
+                <a href="/plot/dashboard">시각화 보기</a>
             </div>
 
             <div class="card">
@@ -316,19 +316,214 @@ def root(request: Request, db: Session = Depends(get_db)):
     </html>
     """)
 
-## 시각화 관련 라우트 (habit_analyis), 데이터 시각화 페이지
+# -----시각화 관련 라우트 (habit_analyis), 데이터 시각화 페이지-----
 
-# 예시 1
+# 데이터 허브 페이지
+@app.get("/plot/dashboard", response_class=HTMLResponse)
+def plot_dashboard(request: Request):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    return """
+    <html>
+    <head>
+        <title>📊 데이터 시각화</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', sans-serif;
+                background-color: #f9fafc;
+                margin: 0;
+                padding: 0;
+                color: #222;
+                text-align: center;
+            }
+            header {
+                background: linear-gradient(120deg, #02071e, #030928);
+                color: white;
+                padding: 40px 0;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            }
+            h1 { margin: 0; font-size: 2em; }
+            p.desc { color: #ddd; margin-top: 5px; }
+
+            .container {
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 25px;
+                margin: 50px auto;
+                max-width: 900px;
+            }
+            .card {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                width: 250px;
+                padding: 25px;
+                transition: transform 0.2s ease;
+            }
+            .card:hover { transform: translateY(-5px); }
+            .card h2 { color: #02071e; margin-bottom: 10px; }
+            .card p { color: #555; font-size: 0.95em; margin-bottom: 15px; }
+            .card a {
+                display: inline-block;
+                text-decoration: none;
+                background-color: #030928;
+                color: white;
+                padding: 10px 16px;
+                border-radius: 6px;
+                transition: background-color 0.2s;
+            }
+            .card a:hover { background-color: #02071e; }
+
+            footer { margin-top: 40px; color: #888; font-size: 0.9em; }
+            a.home { color: #007bff; text-decoration: none; }
+            a.home:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>데이터 시각화 및 분석</h1>
+            <p class="desc">나의 성취와 패턴을 다양한 시각화로 확인하세요</p>
+        </header>
+
+        <div class="container">
+            <div class="card">
+                <h2>개인 퀘스트 현황</h2>
+                <p>완료율과 미완료율을 비율로 시각화합니다.</p>
+                <a href="/plot/user">보기</a>
+            </div>
+
+            <div class="card">
+                <h2>카테고리별 분석</h2>
+                <p>AI 예측 성공률을 카테고리별로 비교합니다.</p>
+                <a href="/plot/quest">보기</a>
+            </div>
+
+            <div class="card">
+                <h2>성장 추세</h2>
+                <p>시간이 지남에 따라 완료된 퀘스트 수를 확인하세요.</p>
+                <a href="/plot/trend">보기</a>
+            </div>
+
+            <div class="card">
+                <h2>집중 분야 분석</h2>
+                <p>내가 가장 몰입하는 카테고리를 시각화합니다.</p>
+                <a href="/plot/focus">보기</a>
+            </div>
+        </div>
+
+        <footer>
+            <a class="home" href="/">🏠 홈으로 돌아가기</a>
+        </footer>
+    </body>
+    </html>
+    """
+
+# 헬퍼 함수: 데이터 없음 메시지 HTML 생성
+def _no_data_html(message: str = "데이터가 없습니다. 퀘스트를 먼저 추가하세요!") -> str:
+    """데이터가 없을 때 표시할 중앙 정렬된 HTML 응답을 생성합니다."""
+    return f"""
+    <html>
+        <body style="text-align:center; font-family:'Segoe UI'; padding-top: 50px;">
+            <h3 style="color: #555;">{message}</h3>
+            <br><a href="/plot/dashboard">대시보드로 돌아가기</a>
+            <br><a href="/">🏠 홈으로</a>
+        </body>
+    </html>
+    """
+
+# 개인 퀘스트 진행 현황 시각화
 @app.get("/plot/user", response_class=HTMLResponse)
-def user_plot():
-    img_base64 = plot_user_completed()
-    return f'<html><body><h2>사용자별 완료 퀘스트</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
+def plot_user(request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
 
-# 예시 2
+    img_base64 = plot_user_progress(db, int(user_id))
+    if not img_base64:
+        return HTMLResponse("<h3>데이터가 없습니다. 퀘스트를 먼저 추가하세요!</h3>")
+
+    return f"""
+    <html>
+        <body style="text-align:center;font-family:Segoe UI;">
+            <h2>내 퀘스트 진행 현황</h2>
+            <img src="data:image/png;base64,{img_base64}" />
+            <br><a href="/">🏠 홈으로</a>
+        </body>
+    </html>
+    """
+
+# 카테고리별 성공률 시각화
 @app.get("/plot/quest", response_class=HTMLResponse)
-def quest_plot():
-    img_base64 = plot_quest_completion_rate()
-    return f'<html><body><h2>퀘스트별 완료율</h2><img src="data:image/png;base64,{img_base64}"/></body></html>'
+def plot_quest(request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    img_base64 = plot_success_rate_by_category(db, int(user_id))
+    if not img_base64:
+        return HTMLResponse("<h3>데이터가 없습니다. 퀘스트를 먼저 추가하세요!</h3>")
+
+    return f"""
+    <html>
+        <body style="text-align:center;font-family:Segoe UI;">
+            <h2>카테고리별 평균 성공률</h2>
+            <img src="data:image/png;base64,{img_base64}" />
+            <br><a href="/">🏠 홈으로</a>
+        </body>
+    </html>
+    """
+
+# 성장 추세 시각화 
+@app.get("/plot/trend", response_class=HTMLResponse)
+def plot_trend(request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    img_base64 = plot_growth_trend(db, int(user_id))
+    
+    if not img_base64:
+        # 데이터 없을 때 중앙 정렬 HTML 반환
+        message = "충분한 완료 기록 데이터가 없습니다. 퀘스트를 더 완료하고 기록하세요!"
+        return HTMLResponse(_no_data_html(message))
+
+    return f"""
+    <html>
+        <body style="text-align:center;font-family:Segoe UI;">
+            <h2>시간 경과에 따른 퀘스트 성장 추세 (누적 완료)</h2>
+            <img src="data:image/png;base64,{img_base64}" />
+            <br><a href="/plot/dashboard">대시보드로 돌아가기</a>
+            <br><a href="/">🏠 홈으로</a>
+        </body>
+    </html>
+    """
+
+# 집중 분야 분석 시각화 (추가)
+@app.get("/plot/focus", response_class=HTMLResponse)
+def plot_focus(request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    img_base64 = plot_focus_area(db, int(user_id))
+    
+    if not img_base64:
+        # 데이터 없을 때 중앙 정렬 HTML 반환
+        return HTMLResponse(_no_data_html())
+
+    return f"""
+    <html>
+        <body style="text-align:center;font-family:Segoe UI;">
+            <h2>나의 퀘스트 집중 분야 (카테고리 분포)</h2>
+            <img src="data:image/png;base64,{img_base64}" />
+            <br><a href="/plot/dashboard">📊 대시보드로 돌아가기</a>
+            <br><a href="/">🏠 홈으로</a>
+        </body>
+    </html>
+    """
 
 ## DB 관련 라우트 (CRUD), 퀘스트 관리 페이지
 

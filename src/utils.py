@@ -4,6 +4,9 @@ Pandas를 사용해 사용자별 완료 수나 퀘스트별 완료율 등을 계
 Base64 문자열로 인코딩하여 main.py의 HTML 응답으로 직접 전달하는 함수
 '''
 
+import matplotlib
+matplotlib.use('Agg')
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -13,6 +16,7 @@ from .database import SessionLocal, Quest, init_db
 
 DATA_PATH = "data/sample_quests.csv"
 
+# db 불러오는 함수
 def load_data_from_db():
     """DB의 Quest 테이블 데이터를 Pandas DataFrame으로 로드합니다."""
     db: Session = SessionLocal()

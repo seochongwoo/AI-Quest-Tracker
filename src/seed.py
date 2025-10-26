@@ -6,7 +6,7 @@ DB 관리 및 데이터 구조 정의 (백본)
 import random
 from datetime import datetime, timedelta, timezone
 import numpy as np
-from .database import SessionLocal, User, Quest, init_db
+from .database import SessionLocal, User, Quest, QuestHistory,init_db
 from .model import get_user_success_rate
 
 
@@ -41,8 +41,13 @@ def seed_users(db, num_users=NUM_USERS):
     user_bias_map = {}
 
     for i in range(1, num_users + 1):
-        bias = np.random.normal(loc=0.0, scale=0.15)  # 개인별 편향 (조금 더 강하게)
-        user = User(name=f"user{i}", email=f"user{i}@example.com")
+        bias = np.random.normal(loc=0.0, scale=0.15)
+        user = User(
+            name=f"user{i}",
+            email=f"user{i}@example.com",
+            consistency_score=random.randint(1, 5),
+            risk_aversion_score=random.randint(1, 5),
+        )
         db.add(user)
         users.append(user)
         user_bias_map[i] = bias
@@ -123,9 +128,22 @@ def seed_quests(db, users, user_bias_map, num_quests_per_user=QUESTS_PER_USER):
                 success_rate=success_rate,
             )
             db.add(quest)
+            db.commit()
+            db.refresh(quest)
 
-    db.commit()
-
+            if completed:
+                num_logs = random.randint(1, 3)
+                for j in range(num_logs):
+                    log_date = created + timedelta(days=j)
+                    progress = round(random.uniform(0.5, 1.0), 2)
+                    history = QuestHistory(
+                        quest_id=quest.id,
+                        user_id=user.id,
+                        progress=progress,
+                        timestamp=log_date,
+                    )
+                    db.add(history)
+                db.commit()
 
 def run_seed():
     """DB 초기화 및 시드 실행"""
