@@ -415,6 +415,7 @@ def plot_dashboard(request: Request):
         </div>
 
         <footer>
+            <a href="/plot/dashboard">📊 대시보드로 돌아가기</a> |
             <a class="home" href="/">🏠 홈으로 돌아가기</a>
         </footer>
     </body>
@@ -434,6 +435,77 @@ def _no_data_html(message: str = "데이터가 없습니다. 퀘스트를 먼저
     </html>
     """
 
+# 공통 스타일 템플릿
+def _styled_plot_page(title: str, desc: str, emoji: str, img_base64: str) -> str:
+    return f"""
+    <html>
+    <head>
+        <title>{emoji} {title}</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background-color: #f4f6f9;
+                color: #222;
+                margin: 0;
+                padding: 0;
+                text-align: center;
+            }}
+            header {{
+                background: linear-gradient(120deg, #02071e, #030928);
+                color: white;
+                padding: 30px 0;
+                margin-bottom: 30px;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            }}
+            h1 {{ margin: 0; font-size: 1.8em; }}
+            p.desc {{ color: #ccc; margin-top: 8px; font-size: 1em; }}
+            .card {{
+                background: white;
+                width: 80%;
+                max-width: 700px;
+                margin: 0 auto;
+                border-radius: 12px;
+                box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+                padding: 20px;
+                text-align: center;
+            }}
+            img {{
+                width: 90%;
+                max-width: 650px;
+                border-radius: 8px;
+                margin-top: 15px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }}
+            footer {{
+                margin-top: 30px;
+                color: #777;
+                font-size: 0.9em;
+            }}
+            a {{
+                color: #007bff;
+                text-decoration: none;
+            }}
+            a:hover {{ text-decoration: underline; }}
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>{emoji} {title}</h1>
+            <p class="desc">{desc}</p>
+        </header>
+
+        <div class="card">
+            <img src="data:image/png;base64,{img_base64}" alt="{title}" />
+        </div>
+
+        <footer>
+            <a href="/plot/dashboard">📊 대시보드로 돌아가기</a> |
+            <a href="/">🏠 홈으로</a>
+        </footer>
+    </body>
+    </html>
+    """
+
 # 개인 퀘스트 진행 현황 시각화
 @app.get("/plot/user", response_class=HTMLResponse)
 def plot_user(request: Request, db: Session = Depends(get_db)):
@@ -443,17 +515,14 @@ def plot_user(request: Request, db: Session = Depends(get_db)):
 
     img_base64 = plot_user_progress(db, int(user_id))
     if not img_base64:
-        return HTMLResponse("<h3>데이터가 없습니다. 퀘스트를 먼저 추가하세요!</h3>")
+        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
 
-    return f"""
-    <html>
-        <body style="text-align:center;font-family:Segoe UI;">
-            <h2>내 퀘스트 진행 현황</h2>
-            <img src="data:image/png;base64,{img_base64}" />
-            <br><a href="/">🏠 홈으로</a>
-        </body>
-    </html>
-    """
+    return _styled_plot_page(
+        title="내 퀘스트 진행 현황",
+        desc="완료율과 미완료율의 비율을 시각적으로 확인하세요.",
+        emoji="📊",
+        img_base64=img_base64
+    )
 
 # 카테고리별 성공률 시각화
 @app.get("/plot/quest", response_class=HTMLResponse)
@@ -464,17 +533,15 @@ def plot_quest(request: Request, db: Session = Depends(get_db)):
 
     img_base64 = plot_success_rate_by_category(db, int(user_id))
     if not img_base64:
-        return HTMLResponse("<h3>데이터가 없습니다. 퀘스트를 먼저 추가하세요!</h3>")
+        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
 
-    return f"""
-    <html>
-        <body style="text-align:center;font-family:Segoe UI;">
-            <h2>카테고리별 평균 성공률</h2>
-            <img src="data:image/png;base64,{img_base64}" />
-            <br><a href="/">🏠 홈으로</a>
-        </body>
-    </html>
-    """
+    return _styled_plot_page(
+        title="카테고리별 평균 성공률",
+        desc="AI가 예측한 카테고리별 성공률을 비교해보세요.",
+        emoji="🎯",
+        img_base64=img_base64
+    )
+
 
 # 성장 추세 시각화 
 @app.get("/plot/trend", response_class=HTMLResponse)
@@ -484,24 +551,17 @@ def plot_trend(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     img_base64 = plot_growth_trend(db, int(user_id))
-    
     if not img_base64:
-        # 데이터 없을 때 중앙 정렬 HTML 반환
-        message = "충분한 완료 기록 데이터가 없습니다. 퀘스트를 더 완료하고 기록하세요!"
-        return HTMLResponse(_no_data_html(message))
+        return HTMLResponse(_no_data_html("충분한 완료 기록 데이터가 없습니다. 퀘스트를 더 완료하세요!"))
 
-    return f"""
-    <html>
-        <body style="text-align:center;font-family:Segoe UI;">
-            <h2>시간 경과에 따른 퀘스트 성장 추세 (누적 완료)</h2>
-            <img src="data:image/png;base64,{img_base64}" />
-            <br><a href="/plot/dashboard">대시보드로 돌아가기</a>
-            <br><a href="/">🏠 홈으로</a>
-        </body>
-    </html>
-    """
+    return _styled_plot_page(
+        title="시간 경과에 따른 성장 추세",
+        desc="시간에 따라 누적 완료 퀘스트 수의 변화를 확인하세요.",
+        emoji="📈",
+        img_base64=img_base64
+    )
 
-# 집중 분야 분석 시각화 (추가)
+# 집중 분야 분석 시각화
 @app.get("/plot/focus", response_class=HTMLResponse)
 def plot_focus(request: Request, db: Session = Depends(get_db)):
     user_id = request.cookies.get("user_id")
@@ -509,21 +569,15 @@ def plot_focus(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     img_base64 = plot_focus_area(db, int(user_id))
-    
     if not img_base64:
-        # 데이터 없을 때 중앙 정렬 HTML 반환
-        return HTMLResponse(_no_data_html())
+        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
 
-    return f"""
-    <html>
-        <body style="text-align:center;font-family:Segoe UI;">
-            <h2>나의 퀘스트 집중 분야 (카테고리 분포)</h2>
-            <img src="data:image/png;base64,{img_base64}" />
-            <br><a href="/plot/dashboard">📊 대시보드로 돌아가기</a>
-            <br><a href="/">🏠 홈으로</a>
-        </body>
-    </html>
-    """
+    return _styled_plot_page(
+        title="집중 분야 분석",
+        desc="내가 가장 몰입하는 카테고리를 시각화합니다.",
+        emoji="💡",
+        img_base64=img_base64
+    )
 
 ## DB 관련 라우트 (CRUD), 퀘스트 관리 페이지
 
@@ -597,6 +651,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     user_name = user.name
     quests = crud.get_quests_by_user(db, user_id=user_id_int)
     
+    # 기본 퀘스트 목록 출력
     quest_list_html = ""
     if quests:
         for quest in quests:
@@ -627,6 +682,58 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             """
     else:
         quest_list_html = "<p class='no-quest'>아직 등록된 퀘스트가 없습니다. 위에서 새로운 퀘스트를 추가해 보세요!</p>"
+
+    # 완료된 퀘스트 목록 분리
+    completed_quests = [q for q in quests if q.completed]
+    active_quests = [q for q in quests if not q.completed]
+
+    # 진행 중인 퀘스트 HTML
+    active_quest_html = ""
+    if active_quests:
+        for quest in active_quests:
+            success_rate_percent = f"{quest.success_rate * 100:.1f}%"
+            active_quest_html += f"""
+            <div class="quest-item pending">
+                <div class="quest-info">
+                    <span class="quest-name">{quest.name}</span>
+                    <span class="quest-meta">
+                        | 카테고리: {quest.category} | 난이도: {quest.difficulty or 'N/A'} | 목표: {quest.duration or 'N/A'}일
+                    </span>
+                    <p class="motivation-text">[{ 'AI 추천' if quest.ai_recommended else '직접 등록'}] {quest.motivation or ''}</p>
+                </div>
+                <div class="quest-actions">
+                    <span class="status-badge">진행 중</span>
+                    <button class="toggle-btn" data-item-id="{quest.id}">완료로 변경</button> 
+                    <button class="delete-btn" data-item-id="{quest.id}">삭제</button>
+                </div>
+            </div>
+            """
+    else:
+        active_quest_html = "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
+
+    # 완료된 퀘스트 HTML
+    completed_quest_html = ""
+    if completed_quests:
+        completed_quests.sort(key=lambda q: q.completed_at or q.created_at, reverse=True)
+        for quest in completed_quests[:5]:  # 최근 5개까지만 보여주기
+            days = (quest.completed_at - quest.created_at).days if quest.completed_at else "-"
+            completed_quest_html += f"""
+            <div class="quest-item completed">
+                <div class="quest-info">
+                    <span class="quest-name">{quest.name}</span>
+                    <span class="quest-meta">
+                        | 카테고리: {quest.category} | 난이도: {quest.difficulty or 'N/A'} | 기간: {days}일 | 성공률: {quest.success_rate * 100:.1f}%
+                    </span>
+                    <p class="motivation-text">"{quest.motivation or '동기 없음'}"</p>
+                </div>
+                <div class="quest-actions">
+                    <span class="status-badge">✅ 완료</span>
+                    <button class="delete-btn" data-item-id="{quest.id}">삭제</button>
+                </div>
+            </div>
+            """
+    else:
+        completed_quest_html = "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
 
 
     # 최종 HTML 렌더링
@@ -733,6 +840,25 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             .delete-btn:hover {{ background-color: #c82333; }}
             
             .no-quest {{ text-align:center; padding:30px; color:#777; font-style: italic; }}
+
+            .quest-list-section h2 {{
+                color: #02071e;
+                border-left: 6px solid #030928;
+                padding-left: 10px;
+            }}
+
+            .quest-item.completed {{
+                background: #f7fdf8;
+                border-left: 5px solid #28a745;
+            }}
+            .quest-item.pending {{
+                background: #fffdf4;
+                border-left: 5px solid #ffc107;
+            }}
+            .quest-item:hover {{
+                transform: translateY(-3px);
+                transition: transform 0.2s;
+            }}
         </style>
     </head>
     <body>
@@ -780,6 +906,13 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
                 <h2>📝 현재 진행 중인 퀘스트 목록</h2>
                 {quest_list_html}
             </div>
+
+            <div class="quest-list-section">
+                <h2>🏁 완료된 퀘스트 아카이브</h2>
+                <p style="color:#777; font-size:0.9em;">최근 완료한 퀘스트들을 모아봤어요!</p>
+                {completed_quest_html}
+            </div>
+    </div>
         </div>
 
         <script>

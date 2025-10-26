@@ -23,8 +23,8 @@ except:
 
 plt.rcParams['axes.unicode_minus'] = False 
 
+# 개인 퀘스트 진행 현황을 시각화
 def plot_user_progress(db: Session, user_id: int):
-    """개인 퀘스트 진행 현황을 시각화"""
     quests = db.query(Quest).filter(Quest.user_id == user_id).all()
     if not quests:
         return None
@@ -52,9 +52,9 @@ def plot_user_progress(db: Session, user_id: int):
     plt.close(fig)
     return img_base64
 
-
+# 카테고리별 성공률 시각화
 def plot_success_rate_by_category(db: Session, user_id: int):
-    """카테고리별 성공률 시각화"""
+    
     quests = db.query(Quest).filter(Quest.user_id == user_id).all()
     if not quests:
         return None
@@ -80,8 +80,9 @@ def plot_success_rate_by_category(db: Session, user_id: int):
     plt.close(fig)
     return img_base64
 
+# 성장 추세 시각화
 def plot_growth_trend(db: Session, user_id: int):
-    """사용자의 누적 퀘스트 완료 추세를 시각화합니다."""
+
     # 'completed' 액션이 발생한 날짜별 카운트 조회
     trend_data = db.query(
         func.date(QuestHistory.timestamp).label('date'),
@@ -120,9 +121,9 @@ def plot_growth_trend(db: Session, user_id: int):
     plt.close(fig)
     return img_base64
 
-
+# 집중 분야 분석 시각화
 def plot_focus_area(db: Session, user_id: int):
-    """사용자가 등록한 퀘스트의 카테고리 분포를 도넛 차트로 시각화합니다."""
+
     # 사용자의 퀘스트 카테고리별 카운트 조회
     category_counts = db.query(
         Quest.category, 

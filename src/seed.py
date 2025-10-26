@@ -124,6 +124,7 @@ def seed_quests(db, users, user_bias_map, num_quests_per_user=QUESTS_PER_USER):
                 difficulty=difficulty,
                 motivation=motivation,
                 completed=completed,
+                created_at=created,
                 completed_at=completed_at,
                 success_rate=success_rate,
             )
@@ -132,18 +133,34 @@ def seed_quests(db, users, user_bias_map, num_quests_per_user=QUESTS_PER_USER):
             db.refresh(quest)
 
             if completed:
-                num_logs = random.randint(1, 3)
-                for j in range(num_logs):
-                    log_date = created + timedelta(days=j)
-                    progress = round(random.uniform(0.5, 1.0), 2)
-                    history = QuestHistory(
-                        quest_id=quest.id,
-                        user_id=user.id,
-                        progress=progress,
-                        timestamp=log_date,
-                    )
-                    db.add(history)
-                db.commit()
+                duration_days = (quest.completed_at - quest.created_at).days
+                history = QuestHistory(
+                    quest_id=quest.id,
+                    user_id=user.id,
+                    action="completed",
+                    progress=1.0,
+                    started_at=quest.created_at,
+                    completed_at=quest.completed_at,
+                    duration_days=duration_days,
+                    timestamp=quest.completed_at
+                )
+                db.add(history)
+                
+            else:
+                # 미완료 퀘스트의 경우 생성 로그만 남김
+                history = QuestHistory(
+                    quest_id=quest.id,
+                    user_id=user.id,
+                    action="created",
+                    progress=random.uniform(0.1, 0.8),
+                    started_at=quest.created_at,
+                    completed_at=None,
+                    duration_days=None,
+                    timestamp=quest.created_at
+                )
+                db.add(history)    
+            
+            db.commit()
 
 def run_seed():
     """DB 초기화 및 시드 실행"""

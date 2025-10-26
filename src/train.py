@@ -77,6 +77,7 @@ def get_user_statistics_df(db):
         'streak_days': u.streak_days,
         'preferred_category': u.preferred_category,
         'average_success_rate': u.average_success_rate,
+        'user_success_rate': u.average_success_rate,
     } for u in users]
     user_df = pd.DataFrame(user_stats)
     
@@ -119,39 +120,49 @@ def train_model():
     if "days" not in df.columns:
         if "duration" in df.columns:
             df.rename(columns={"duration": "days"}, inplace=True)
+    
+    if 'motivation' not in df.columns:
+        df['motivation'] = ''
 
     df['total_quests'] = df['total_quests'].fillna(0)
     df['completed_quests'] = df['completed_quests'].fillna(0)
     df['streak_days'] = df['streak_days'].fillna(0)
-    df['average_success_rate'] = df['average_success_rate'].fillna(df['average_success_rate'].mean())
-    # preferred_category는 원-핫 인코딩이 필요하므로 그대로 두거나 'none'으로 채우기
+
+    mean_rate = df['average_success_rate'].mean()
+    df['average_success_rate'] = df['average_success_rate'].fillna(mean_rate)
+    df['user_success_rate'] = df['user_success_rate'].fillna(mean_rate)
     df['preferred_category'] = df['preferred_category'].fillna('none')
 
     embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
     print("임베딩 생성 중 (한국어 포함)...")
-    motivation_text = df.get("motivation", pd.Series([""] * len(df))).astype(str)
-    text_features = df["name"].astype(str) + " " + df.get("motivation", "")
+
+    text_features = df["name"].astype(str) + " " + df["motivation"].astype(str)
 
     embeddings = embedder.encode(text_features.tolist(), show_progress_bar=True)
     emb_df = pd.DataFrame(embeddings, columns=[f"emb_{i}" for i in range(embeddings.shape[1])])
     df = pd.concat([df.reset_index(drop=True), emb_df], axis=1)
-    df = df.drop(columns=["name"], errors="ignore")
+    df = df.drop(columns=["name", "motivation"], errors="ignore")
 
-    # feature 다양화: success_rate, category, preferred_category 추가
-    if "success_rate" in df.columns:
+    # 퀘스트의 success_rate (seed에서 예측값) 결측치 채우기
+    if "success_rate" not in df.columns:
+        # 컬럼이 없으면 user_success_rate(사용자 평균) 사용
+        df["success_rate"] = df["user_success_rate"] 
+    else:
         df["success_rate"] = df["success_rate"].fillna(df["success_rate"].mean())
     
     cols_to_dummy = [c for c in ["category", "preferred_category"] if c in df.columns]
-    df = pd.get_dummies(df, columns=cols_to_dummy, drop_first=True)
+    df = pd.get_dummies(df, columns=cols_to_dummy, drop_first=True, prefix_sep='_')
 
-    X = df.drop(columns=["completed"])
+    cols_to_drop = ["completed", "last_completed_at", "user_id"]
+
+    X = df.drop(columns=cols_to_drop, errors='ignore')
     y = df["completed"]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
     num_cols = [
-        "days", "difficulty", "success_rate", 
+        "days", "difficulty", "success_rate", "user_success_rate", 
         "total_quests", "completed_quests", "streak_days", 
         "average_success_rate"
     ]

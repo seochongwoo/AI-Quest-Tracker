@@ -74,6 +74,10 @@ class QuestHistory(Base):
     progress = Column(Float, default=0.0)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    duration_days = Column(Integer, nullable=True)
+
     quest = relationship("Quest", back_populates="history")
     user = relationship("User", back_populates="quest_histories")
 
