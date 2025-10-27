@@ -19,6 +19,7 @@ from src.database import init_db, SessionLocal, User, QuestHistory, Quest
 from sqlalchemy import func
 from sqlalchemy.sql import case
 from datetime import datetime
+import torch
 
 MODEL_PATH = "model/model.pkl"
 
@@ -196,6 +197,15 @@ def train_model():
     print(f"✅ 모델 학습 완료. 테스트 정확도: {score:.3f}")
 
     print("--- 3. 모델 저장 중 ---")
+    try:
+        if isinstance(embedder, SentenceTransformer):
+            embedder.to(torch.device('cpu')) # torch 임포트 필요 (train.py에 torch 임포트가 없으면 추가)
+    except NameError:
+        # torch가 임포트되지 않은 경우 무시하거나, train.py 최상단에 import torch 추가
+        pass
+    except Exception as e:
+        print(f"경고: 임베더를 CPU로 이동 중 오류 발생: {e}")
+
     joblib.dump((model, embedder), MODEL_PATH)
     print(f"✅ 모델 저장 완료: {MODEL_PATH}")
 

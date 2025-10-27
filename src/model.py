@@ -9,6 +9,10 @@ import numpy as np
 from typing import Optional, Dict, Any
 from src.database import SessionLocal, Quest, User
 from sentence_transformers import SentenceTransformer # 임베딩 객체 사용을 위한 임포트 추가
+# 노트북 환경(GPU 없음)에서 실행가능하게 바꾸기위한 import
+import torch
+import io
+import pickle
 
 KNOWN_CATEGORIES = ['reading', 'study', 'exercise', 'work', 'hobby', 'health', 'general', 'none']
 
@@ -59,28 +63,86 @@ def get_user_stats_for_prediction(user_id: int) -> Dict[str, Any]:
 def load_ml_model():
     """joblib 파일을 로드하여 전역 변수 ML_MODEL과 EMBEDDER에 저장합니다."""
     global ML_MODEL, EMBEDDER
+
+    # CPU-safe 로딩을 위한 커스텀 Unpickler 정의
+    class CPU_Unpickler(pickle.Unpickler):
+        def find_class(self, module, name):
+            if module == 'torch.storage' and name == '_load_from_bytes':
+                # PyTorch 텐서 로드를 가로채서 map_location='cpu'를 적용
+                def _load_from_bytes_cpu(b):
+                    return torch.load(io.BytesIO(b), map_location='cpu')
+                return _load_from_bytes_cpu
+            return super().find_class(module, name) # 다른 모든 클래스 로드는 기본 동작으로 위임
+
+    loaded_objects = None
+    
     try:
-        # train.py에서 (model, embedder) 튜플을 저장했다고 가정하고 로드
+        # 1차 시도: 일반 joblib 로드 (GPU 환경에서 저장되었다면 CPU 환경에서 실패할 수 있음)
         loaded_objects = joblib.load(MODEL_PATH)
         
-        # 로드된 객체가 튜플인지 확인
+    except Exception as e:
+        error_msg = str(e)
+        
+        # 2차 시도: CUDA 오류 발생 시 CPU-safe 로더로 재시도
+        if "Attempting to deserialize object on a CUDA device" in error_msg:
+            print("⚠️ CUDA 로드 오류 감지. CPU-safe 로더로 재시도합니다.")
+            try:
+                with open(MODEL_PATH, 'rb') as f:
+                    loaded_objects = CPU_Unpickler(f).load()
+            except Exception as e_cpu:
+                # 3차 시도: CPU-safe 로더에서도 오류(STACK_GLOBAL) 발생 시, 폴백 실행
+                print(f"재시도 중에도 오류 발생: {e_cpu}")
+                
+                # [핵심 수정: 폴백 로직] ML_MODEL(Scikit-learn)만 로드하고 EMBEDDER는 수동 재구성
+                try:
+                    # ML_MODEL만 joblib으로 로드 시도 (PyTorch 객체 로딩 실패를 무시)
+                    # NOTE: 이 코드는 train.py가 (ML_MODEL, EMBEDDER) 튜플을 저장했다는 가정을 깨고,
+                    # ML_MODEL이 파일의 첫 번째 객체라고 가정하여 안전하게 로드합니다.
+                    print("⚠️ Scikit-learn 모델만 로드하고 임베더는 수동 재구성하여 오류를 우회합니다.")
+                    
+                    # 파일 전체를 joblib.load로 로드하면 여전히 오류가 발생할 수 있으므로, 
+                    # 파일의 첫 번째 요소(ML_MODEL)만 로드하는 것은 불가능합니다.
+                    
+                    # 가장 안전한 방식: train.py에서 사용한 임베더를 수동으로 로드
+                    ML_MODEL = joblib.load(MODEL_PATH)[0] # 튜플의 첫 번째 요소만 로드 시도
+                    
+                    # train.py에서 사용한 임베딩 모델을 수동으로 로드하고 CPU로 이동
+                    EMBEDDER = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').to(torch.device('cpu'))
+                    
+                    print("✅ ML 모델(Scikit-learn)과 임베딩 객체가 분리되어 성공적으로 로드(재구성)되었습니다.")
+                    return ML_MODEL
+
+                except Exception as e_fallback:
+                    print(f"Fallback 로드 중에도 오류 발생. 모델 파일을 확인할 수 없습니다: {e_fallback}")
+                    return None
+        
+        # 파일 없음 오류 처리
+        elif "FileNotFoundError" in error_msg:
+            print(f"오류: 모델 파일 '{MODEL_PATH}'을 찾을 수 없습니다. train.py를 먼저 실행하세요.")
+            return None
+        else:
+            print(f"모델 로드 중 오류 발생: {e}")
+            return None
+
+    # 로드 성공 또는 CPU-safe 로드 성공 시 객체 처리
+    if loaded_objects is not None:
         if isinstance(loaded_objects, tuple) and len(loaded_objects) == 2:
             ML_MODEL, EMBEDDER = loaded_objects
+            # 임베딩 객체가 PyTorch 모델이므로, 로드 후 CPU로 명시적 이동 (안정성 추가)
+            try:
+                EMBEDDER.to(torch.device('cpu')) 
+            except:
+                pass 
+            print("✅ ML 모델과 임베딩 객체가 성공적으로 로드되었습니다.")
+            return ML_MODEL
         else:
-            # 튜플이 아니면, 로드된 객체를 모델로 간주하고 임베딩 객체는 수동 로드
             ML_MODEL = loaded_objects
-            # 임베딩 객체는 매번 수동 로드하면 성능이 저하되므로,
-            EMBEDDER = SentenceTransformer('all-MiniLM-L6-v2') 
+            # train.py에서 사용된 임베더를 가정하고 수동 로드 후 CPU로 이동
+            EMBEDDER = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').to(torch.device('cpu')) 
             print("경고: 모델 파일에 임베딩 객체가 포함되지 않았습니다. 임베딩 객체를 수동 로드합니다.")
-            
-        print("ML 모델과 임베딩 객체가 성공적으로 로드되었습니다.")
-        return ML_MODEL
-    except FileNotFoundError:
-        print(f"오류: 모델 파일 '{MODEL_PATH}'을 찾을 수 없습니다. train.py를 먼저 실행하세요.")
-        return None
-    except Exception as e:
-        print(f"모델 로드 중 오류 발생: {e}")
-        return None
+            return ML_MODEL
+    
+    return None
 
 # crud.py가 호출하는 표준 함수 이름(predict_success_rate)으로 변경
 def predict_success_rate(
@@ -95,12 +157,12 @@ def predict_success_rate(
     입력 피처를 사용하여 퀘스트 성공 확률 (0.0 ~ 1.0)을 예측합니다.
     """
     global ML_MODEL, EMBEDDER
-    try:
-        model, embedder = joblib.load(MODEL_PATH)
-        print("✅ 모델 및 임베딩 로드 완료")
-    except:
-        print("⚠️ 모델 파일을 찾을 수 없습니다. train.py를 먼저 실행하세요.")
-        return 0.5
+    if ML_MODEL is None or EMBEDDER is None:
+        load_ml_model() 
+        if ML_MODEL is None:
+            # 로드 실패 시 기본값 반환
+            print("⚠️ 모델 로드에 실패했습니다. 기본값 0.5를 반환합니다.")
+            return 0.5
 
     # 1. 사용자 통계 피처 로드
     user_stats = get_user_stats_for_prediction(user_id)
@@ -128,16 +190,14 @@ def predict_success_rate(
     # 5. One-Hot Encoding (train.py와 동일하게 적용)
     cols_to_dummy = ["category", "preferred_category"]
     
-    # [수정] 모든 카테고리를 포함하는 가상의 DataFrame을 생성하여 One-Hot Encoding을 수행합니다.
-    # 이렇게 하면 학습 시에 존재했던 모든 OHE 컬럼이 생성됩니다.
     dummy_df = pd.DataFrame([
         {'category': c, 'preferred_category': c} for c in KNOWN_CATEGORIES
     ])
     
-    # 5-1. OHE 컬럼명 미리 확보 (drop_first=True 고려)
+    # OHE 컬럼명 미리 확보 (drop_first=True 고려)
     full_dummy_cols = pd.get_dummies(dummy_df, columns=cols_to_dummy, drop_first=True, prefix_sep='_').columns
 
-    # 5-2. 실제 예측 데이터에 OHE 적용
+    # 실제 예측 데이터에 OHE 적용
     df = pd.get_dummies(df, columns=cols_to_dummy, drop_first=True, prefix_sep='_') 
     
     # 6. 임베딩 피처 추가
@@ -146,7 +206,7 @@ def predict_success_rate(
     df = pd.concat([df.reset_index(drop=True), emb_df], axis=1)
 
     # 7. 불필요한 컬럼 제거
-    # user_id, name, motivation, last_completed_at (병합되지 않았으므로)
+    # user_id, name, motivation, last_completed_at
     df = df.drop(columns=['user_id', 'name', 'motivation'], errors='ignore')
 
     # 8. 학습 데이터셋의 컬럼 구조에 맞게 보정
@@ -170,7 +230,7 @@ def predict_success_rate(
     # 최종적으로 필요한 모든 컬럼
     final_cols = [c for c in required_num_cols if c in df.columns] + ohe_cols + emb_cols
     
-    # DataFrame을 예상 컬럼 순서로 재정렬하고, 필요한 경우 0으로 채웁니다.
+    # DataFrame을 예상 컬럼 순서로 재정렬하고, 필요한 경우 0으로 채우기
     df = df.reindex(columns=final_cols, fill_value=0)
     
     try:
