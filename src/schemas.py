@@ -3,17 +3,17 @@ DB 관리 및 데이터 구조 정의 (백본)
 FastAPI와 Pydantic을 사용하여 API로 들어오고 나가는 데이터의 형식과 유효성 정의
 DB 객체를 API 형식으로 변환할 때 사용
 '''
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 from datetime import datetime
 
 # ---------- User ----------
 class UserBase(BaseModel):
     name: str
-    email: str
+    email: Optional[EmailStr] = None
 
 class UserCreate(UserBase):
-    email: Optional[str] = Field("dummy@user.com", description="Simple login을 위한 더미 이메일")
+    email: EmailStr = Field(..., description="사용자 이메일 (로그인 및 복구용)")
     
     # 온보딩 질문에서 받을 성향 점수
     consistency_score: Optional[int] = Field(3, ge=1, le=5)

@@ -62,9 +62,14 @@ def login_page():
         <body>
             <div class="login-box">
                 <h2>AI Quest Tracker</h2>
-                <form action="/login" method="post">
-                    <input type="text" name="nickname" placeholder="닉네임을 입력하세요" required><br>
-                    <button type="submit">시작하기 </button>
+                <form method="post" action="/login">
+                    <label for="nickname">닉네임:</label>
+                    <input type="text" id="nickname" name="nickname" required>
+
+                    <label for="email">이메일:</label>
+                    <input type="email" id="email" name="email" required>
+
+                    <button type="submit">로그인 / 회원가입</button>
                 </form>
             </div>
         </body>
@@ -76,27 +81,35 @@ def login_page():
 async def login_user(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     nickname = form.get("nickname")
+    email = form.get("email")
 
-    # 닉네임으로 사용자 검색
-    user = crud.get_user_by_name(db, name=nickname)
+    # 입력값 검증
+    if not nickname or not email:
+        return HTMLResponse("<h3>닉네임과 이메일을 모두 입력해주세요.</h3>", status_code=400)
+
+    # 이메일로 먼저 사용자 검색
+    user = crud.get_user_by_email(db, email=email)
     if not user:
-        # 없으면 새로 생성 (schemas.UserCreate의 default값 사용)
-        new_user = schemas.UserCreate(name=nickname)
+        # 닉네임으로 중복 체크 (같은 닉네임이 이미 있으면 에러)
+        name_conflict = crud.get_user_by_name(db, name=nickname)
+        if name_conflict:
+            return HTMLResponse("<h3>이미 존재하는 닉네임입니다. 다른 닉네임을 사용해주세요.</h3>", status_code=400)
+
+        # 새로운 사용자 생성
+        new_user = schemas.UserCreate(name=nickname, email=email)
         user = crud.create_user(db=db, user=new_user)
-        # 새로 생성된 경우, 온보딩 페이지로 리디렉션
         redirect_url = "/onboarding"
     else:
-        # 기존 사용자인 경우, 온보딩을 이미 완료했는지 확인
+        # 기존 사용자인 경우 온보딩 여부 확인
         if user.consistency_score == 3 and user.risk_aversion_score == 3:
-            # 기본값(3)이면 온보딩 페이지로 리디렉션
             redirect_url = "/onboarding"
         else:
             redirect_url = "/"
 
-    # 로그인 쿠키 설정 후 리디렉션
+    # 쿠키 설정
     response = RedirectResponse(url=redirect_url, status_code=303)
     response.set_cookie(key="user_id", value=str(user.id), httponly=True, max_age=86400)
-    response.set_cookie(key="user_name", value=user.name, httponly=False, max_age=86400) # HTML에서 사용 가능하도록 httponly 해제
+    response.set_cookie(key="user_name", value=user.name, httponly=False, max_age=86400)
     return response
 
 # 로그아웃

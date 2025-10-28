@@ -108,6 +108,11 @@ def create_simple_user(db: Session, name: str):
 def get_user_by_name(db: Session, name: str):
     return db.query(User).filter(User.name == name).first()
 
+# 이메일로 사용자 조회
+def get_user_by_email(db: Session, email: str):
+    return db.query(User).filter(User.email == email).first()
+
+
 # 성향 점수 업데이트 함수
 def update_user_scores(db: Session, user_id: int, scores: UserUpdateScores):
     db_user = db.query(User).filter(User.id == user_id).first()
