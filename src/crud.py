@@ -3,7 +3,7 @@ DB 관리 및 데이터 구조 정의 (백본)
 database.py의 모델과 schemas.py의 형식을 사용하여 실제 DB와의 상호작용(생성, 읽기, 업데이트, 삭제)을 위한 함수
 '''
 from sqlalchemy.orm import Session
-from .database import User, Quest 
+from .database import User, Quest, SessionLocal
 from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
 
@@ -29,7 +29,6 @@ def create_user(db: Session, user: UserCreate):
 
 # Quest CRUD 함수
 def create_user_quest(db: Session, quest: QuestCreate):
-    """특정 사용자(user_id)를 위한 새로운 퀘스트를 생성합니다."""
 
     predicted_rate = model.predict_success_rate(
         user_id=quest.user_id,
@@ -74,7 +73,6 @@ def get_quest(db: Session, quest_id: int):
 
 # 퀘스트 완료로 변경 
 def mark_quest_complete(db: Session, quest_id: int):
-    """퀘스트를 완료 상태로 변경합니다."""
     db_quest = db.query(Quest).filter(Quest.id == quest_id).first()
     if db_quest:
         db_quest.completed = True
@@ -83,10 +81,9 @@ def mark_quest_complete(db: Session, quest_id: int):
         return db_quest
     return None
 
+# 새로운 퀘스트 생성 및 DB 저장
 def create_quest(db: Session, quest_data: dict):
-    """
-    새로운 퀘스트 생성 및 DB 저장
-    """
+
     db_quest = Quest(**quest_data)
     db.add(db_quest)
     db.commit()
@@ -121,3 +118,27 @@ def update_user_scores(db: Session, user_id: int, scores: UserUpdateScores):
         db.commit()
         db.refresh(db_user)
     return db_user
+
+# ai 조언 생성에 필요한 사용자의 성향 및 통계 데이터를 조회
+def get_user_profile_for_ai(user_id: int):
+    db = SessionLocal()
+    user = db.query(User).filter(User.id == user_id).first()
+    db.close()
+    
+    if not user:
+        # 사용자가 없을 경우 기본값 반환
+        return {
+            "consistency_score": 3,
+            "risk_aversion_score": 3,
+            "total_quests": 10,
+            "completed_quests": 5,
+            "preferred_category": None
+        }
+
+    return {
+        "consistency_score": user.consistency_score if hasattr(user, 'consistency_score') else 3,
+        "risk_aversion_score": user.risk_aversion_score if hasattr(user, 'risk_aversion_score') else 3,
+        "total_quests": user.total_quests if hasattr(user, 'total_quests') else 10,
+        "completed_quests": user.completed_quests if hasattr(user, 'completed_quests') else 5,
+        "preferred_category": user.preferred_category if hasattr(user, 'preferred_category') else None
+    }

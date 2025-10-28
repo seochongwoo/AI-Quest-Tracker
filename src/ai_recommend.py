@@ -10,8 +10,8 @@ _INITIALIZED_ATTEMPTED = False
 
 def get_gemini_client() -> Optional[genai.Client]:
     """
-    Gemini 클라이언트를 초기화하거나, 이미 초기화된 클라이언트를 반환합니다.
-    환경 변수 GEMINI_API_KEY가 없거나 초기화에 실패하면 None을 반환합니다.
+    Gemini 클라이언트를 초기화하거나, 이미 초기화된 클라이언트를 반환
+    환경 변수 GEMINI_API_KEY가 없거나 초기화에 실패하면 None을 반환
     """
     global GEMINI_CLIENT, _INITIALIZED_ATTEMPTED
     
@@ -19,7 +19,7 @@ def get_gemini_client() -> Optional[genai.Client]:
     if GEMINI_CLIENT is not None:
         return GEMINI_CLIENT
         
-    # 2. 이미 한 번 시도했으나 실패한 경우 (두 번째 호출부터 경고 생략)
+    # 2. 이미 한 번 시도했으나 실패한 경우
     if _INITIALIZED_ATTEMPTED:
         return None 
     
@@ -44,7 +44,11 @@ def generate_ai_recommendation(
     quest_name: str, 
     duration: int, 
     difficulty: int, 
-    success_rate: float
+    consistency_score: int,
+    risk_aversion_score: int,
+    total_quests: int,
+    completed_quests: int,
+    preferred_category: str = None
 ) -> str:
     # 중앙 집중화된 get_gemini_client 함수를 통해 클라이언트 객체 가져오기
     client: Optional[genai.Client] = get_gemini_client() 
@@ -52,17 +56,33 @@ def generate_ai_recommendation(
     if client is None:
         return "AI 추천 기능을 사용할 수 없습니다. API 키 설정이 필요합니다."
         
-    percent = round(success_rate * 100)
     
     # 퀘스트 정보를 기반으로 구체적인 코치 역할 프롬프트 작성
     prompt_template = f"""
-    당신은 퀘스트 성공률을 높여주는 최고의 AI 코치입니다.
-    사용자의 목표: "{quest_name}" (예상 기간: {duration}일, 난이도: {difficulty}/5)
-    당신의 AI 예측 성공률은: {percent}% 입니다.
-    
-    사용자에게 이 퀘스트를 성공적으로 완수할 수 있도록 구체적이고 현실적인 맞춤형 조언을 2~3 문장으로 작성해 주세요. 
-    특히, 성공률이 50% 미만이라면, 목표를 주간/일간 작은 단계로 나누는 구체적인 방법(예시 포함)을 제안해 주세요.
-    응답은 조언 내용만 포함해야 하며, 인사말, 마무리 문구("감사합니다" 등), 그리고 'AI 코치'와 같은 지칭어는 생략합니다.
+    당신은 사용자의 행동 패턴과 성향을 분석하여 퀘스트 성공률을 높이는 AI 코치입니다.
+
+    [사용자 프로필]
+    - 전체 퀘스트 수행 수: {total_quests}
+    - 완료한 퀘스트 수: {completed_quests}
+    - 꾸준함 점수(consistency): {consistency_score}/5
+    - 위험 회피 성향(risk_aversion): {risk_aversion_score}/5
+    - 선호 카테고리: {preferred_category or "없음"}
+
+    [현재 퀘스트]
+    - 이름: "{quest_name}"
+    - 예상 기간: {duration}일
+    - 난이도: {difficulty}/5
+
+    당신의 목표는 사용자의 성향과 경험 수준을 바탕으로, 
+    이번 퀘스트를 어떻게 접근해야 지속 가능한 성장을 이룰 수 있을지 조언하는 것입니다.
+
+    작성 지침:
+    1. 조언은 2~3문장으로 구성합니다.
+    2. 전체 퀘스트 대비 완료한 퀘스트가 적다면 “작은 성공의 축적”, “습관의 루틴화”를 강조합니다.
+    3. 전체 퀘스트 대비 완료한 퀘스트가 높다면 “난이도 조절 제안”과 “지속적 성장”을 제안합니다.
+    4. 꾸준함 점수가 낮다면 “시간 루틴 만들기”, “기록 습관화” 중심으로,
+       위험 회피 점수가 낮다면 “도전의 보상과 리스크 관리”를 중심으로 합니다.
+    5. 말투는 따뜻하고 실질적이며, 인사말이나 결론 문구는 생략합니다.
     """
 
     try:

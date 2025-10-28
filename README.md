@@ -26,6 +26,11 @@
 
 ##  Getting Started
 
+### API key 설정 방법
+1. Google AI Studio에서 Gemini API Key를 발급받습니다.
+2. 프로젝트 루트 경로에 `.env` 파일을 생성하고 아래 내용을 추가합니다.
+3. GEMINI_API_KEY="YOUR_API_KEY"
+
 ### Requirements
 - Python 3.9+
 - pip
@@ -33,16 +38,15 @@
 ### Installation
 ```bash
 # 저장소 클론
-git clone https://github.com/username/AI-Quest-Tracker.git
+git clone https://github.com/seochongwoo/AI-Quest-Tracker.git
 cd AI-Quest-Tracker
-
 # 패키지 설치
 pip install -r requirements.txt
 ```
 
 ### Running
 ```bash
-# 1. AI 모델 학습 (최초 1회 필수)
+# 1. 모델 학습 
 # model/model.pkl 파일을 생성합니다.
 python -m src.train
 
@@ -54,7 +58,7 @@ python -m src.train
 ```
 
 - 실행 후: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) 접속하면 Swagger UI에서 API 확인 가능 ✅
-
+- 주의: 초기에 모델의 예측 결과와 AI 코치의 조언이 서로 다를 수 있습니다!
 ---
 
 ##  Features
@@ -128,6 +132,7 @@ predicted_rate = predict_success_rate(
 - [Scikit-learn Documentation](https://scikit-learn.org/stable/)  
 - [FastAPI](https://fastapi.tiangolo.com/)  
 - Sentence Transformers (텍스트 임베딩)
+- Gemini API 
 ---
 
 ##  License

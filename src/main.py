@@ -4,6 +4,7 @@ get_db() 함수를 통해 DB 세션을 각 요청에 주입하고, /users/ 라�
 '''
 # fast api 백엔드를 위한 import
 from fastapi import FastAPI, Depends, HTTPException, Request, Form
+from typing import Annotated
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
@@ -1082,7 +1083,12 @@ def recommend_page():
     """
 
 @app.post("/recommend/result", response_class=HTMLResponse)
-async def recommend_result(request: Request):
+async def recommend_result(
+    request: Request,
+    quest_name: Annotated[str, Form()],
+    duration: Annotated[int, Form()],
+    difficulty: Annotated[int, Form()]
+):
     user_id_str = request.cookies.get("user_id")
     if not user_id_str:
         return RedirectResponse(url="/login", status_code=303)
@@ -1092,16 +1098,34 @@ async def recommend_result(request: Request):
     except ValueError:
         return RedirectResponse(url="/login", status_code=303)
 
-    form = await request.form()
-    quest_name = form.get("quest_name")
-    duration = int(form.get("duration"))
-    difficulty = int(form.get("difficulty"))
-    
-    # ✅ 1. 성공 확률 예측
+    # 1. 성공 확률 예측
     success_rate = model.predict_success_rate(user_id, quest_name, duration, difficulty)
     percent = round(success_rate * 100, 1)
+
+    # 2. 사용자 프로필 데이터 로드 (새로운 함수 호출)
+    user_profile = crud.get_user_profile_for_ai(user_id) 
     
-    # ✅ 2. 성공률 메시지
+    # 3. Gemini AI 조언 생성 (변경된 인자 전체 전달)
+    ai_tip = generate_ai_recommendation(
+        quest_name=quest_name,
+        duration=duration,
+        difficulty=difficulty,
+        # 사용자 프로필 데이터 전달
+        consistency_score=user_profile["consistency_score"],
+        risk_aversion_score=user_profile["risk_aversion_score"],
+        total_quests=user_profile["total_quests"],
+        completed_quests=user_profile["completed_quests"],
+        preferred_category=user_profile["preferred_category"]
+    )
+    
+    # 4. 성공률 메시지 및 색상 설정 (기존 로직 유지)
+    if percent >= 70:
+        color = "#28a745"
+    elif percent >= 50:
+        color = "#ffc107"
+    else:
+        color = "#dc3545"
+
     if percent >= 80:
         message = "🔥 도전해볼 만한 목표예요!"
     elif percent >= 60:
@@ -1111,23 +1135,7 @@ async def recommend_result(request: Request):
     else:
         message = "💀 난이도가 높습니다. 단계를 낮춰보세요."
 
-    # ✅ 3. 색상 설정
-    if percent >= 70:
-        color = "#28a745"
-    elif percent >= 50:
-        color = "#ffc107"
-    else:
-        color = "#dc3545"
-
-    # ✅ 4. Gemini AI 조언 생성
-    ai_tip = generate_ai_recommendation(
-        quest_name=quest_name,
-        duration=duration,
-        difficulty=difficulty,
-        success_rate=success_rate
-    )
-
-    # ✅ 5. 결과 페이지 렌더링
+    # 5. 결과 페이지 렌더링 (HTML 부분은 변경 없음)
     return f"""
     <html>
         <head>
