@@ -5,7 +5,7 @@ SQLAlchemy를 사용하여 SQLite 파일(db.sqlite3)과 연결하는 엔진과 �
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 기본 설정
 DATABASE_URL = "sqlite:///./db.sqlite3"
@@ -55,7 +55,7 @@ class Quest(Base):
     completed = Column(Boolean, default=False)
     ai_recommended = Column(Boolean, default=False)
     success_rate = Column(Float, default=0.5)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
     # 관계 설정

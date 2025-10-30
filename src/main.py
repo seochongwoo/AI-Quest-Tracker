@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from src import crud, schemas, database
 from . import crud, schemas, model
 # Db를 위한 import
-from .database import SessionLocal, init_db, Quest
+from .database import SessionLocal, init_db, QuestHistory
 from . import crud, schemas
 #  AI 예측 및 시간 관리를 위한 임포트 추가
 from sklearn.preprocessing import OneHotEncoder 
 import pandas as pd 
-from datetime import datetime
+from datetime import datetime, timezone
 # 시각화를 위한 import
 from .habit_analysis import plot_user_progress,plot_success_rate_by_category, plot_focus_area, plot_growth_trend
 # ai_recoomend를 위한 import
@@ -1013,6 +1013,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     return HTMLResponse(html)
 
 # 퀘스트 완료 토글 (PATCH)
+
 @app.patch("/quests/{quest_id}/toggle")
 def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db)):
     user_id = request.cookies.get("user_id")
@@ -1024,9 +1025,49 @@ def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Quest not found or not yours")
 
     quest.completed = not quest.completed
+
+    # 완료로 변경하는 경우
+    if quest.completed:
+        quest.completed_at = datetime.now(timezone.utc)
+    
+        if quest.created_at.tzinfo is None:
+            quest.created_at = quest.created_at.replace(tzinfo=timezone.utc)
+    
+
+        days = (quest.completed_at - quest.created_at).days
+        duration_days = max(days, 1)
+
+        history_entry = QuestHistory(
+            quest_id=quest.id,
+            user_id=quest.user_id,
+            action="completed",
+            progress=1.0,
+            completed_at=quest.completed_at,
+            duration_days=duration_days,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(history_entry)
+
+    # 미완료로 되돌리는 경우
+    else:
+        quest.completed_at = None
+        history_entry = QuestHistory(
+            quest_id=quest.id,
+            user_id=quest.user_id,
+            action="reopened",
+            progress=0.0,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(history_entry)
+
     db.commit()
     db.refresh(quest)
-    return {"id": quest.id, "completed": quest.completed}
+
+    return {
+        "id": quest.id,
+        "completed": quest.completed,
+        "completed_at": quest.completed_at,
+    }
 
 # 퀘스트 삭제 (DELETE)
 @app.delete("/quests/{quest_id}")

@@ -3,9 +3,10 @@ DB 관리 및 데이터 구조 정의 (백본)
 database.py의 모델과 schemas.py의 형식을 사용하여 실제 DB와의 상호작용(생성, 읽기, 업데이트, 삭제)을 위한 함수
 '''
 from sqlalchemy.orm import Session
-from .database import User, Quest, SessionLocal
+from .database import User, Quest, QuestHistory, SessionLocal
 from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
+from datetime import datetime, timezone
 
 # User CRUD 함수
 def get_user(db: Session, user_id: int):
@@ -44,6 +45,18 @@ def create_user_quest(db: Session, quest: QuestCreate):
     db.add(db_quest)
     db.commit()
     db.refresh(db_quest)
+    
+    history_entry = QuestHistory(
+        quest_id=db_quest.id,
+        user_id=db_quest.user_id,
+        action="created",
+        progress=0.0,
+        started_at=db_quest.created_at,
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(history_entry)
+    db.commit()
+
     return db_quest
 
 # 퀘스트 목록 조회
@@ -88,6 +101,18 @@ def create_quest(db: Session, quest_data: dict):
     db.add(db_quest)
     db.commit()
     db.refresh(db_quest)
+    
+    history_entry = QuestHistory(
+        quest_id=db_quest.id,
+        user_id=db_quest.user_id,
+        action="created",
+        progress=0.0,
+        started_at=datetime.now(timezone.utc),
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(history_entry)
+    db.commit()
+
     return db_quest
 
 # 간단한 로그인 기능
