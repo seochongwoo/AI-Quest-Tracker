@@ -8,6 +8,7 @@ from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
 from datetime import datetime, timezone
 
+# ----------------------------
 # User CRUD 함수
 def get_user(db: Session, user_id: int):
     """ID로 사용자 정보를 조회합니다."""
@@ -28,6 +29,7 @@ def create_user(db: Session, user: UserCreate):
     db.refresh(db_user) # ID와 같은 자동 생성된 값을 로드
     return db_user
 
+# ----------------------------
 # Quest CRUD 함수
 def create_user_quest(db: Session, quest: QuestCreate):
 
@@ -144,6 +146,27 @@ def update_user_scores(db: Session, user_id: int, scores: UserUpdateScores):
         db.refresh(db_user)
     return db_user
 
+# 퀘스트 진행률 계산 함수
+def calculate_quest_progress(db: Session, quest_id: int) -> float:
+
+    quest = db.query(Quest).filter(Quest.id == quest_id).first()
+    if not quest or not quest.duration:
+        return 0.0
+
+    total_days = quest.duration
+    # 'progress' 또는 'check-in' 액션이 있는 기록만 카운트
+    progress_entries = db.query(QuestHistory).filter(
+        QuestHistory.quest_id == quest_id,
+        QuestHistory.action.in_(["progress", "check-in"])
+    ).count()
+
+    # 진행률 계산
+    progress_rate = min(progress_entries / total_days, 1.0)
+    return round(progress_rate * 100, 2)
+
+
+
+# ----------------------------
 # ai 조언 생성에 필요한 사용자의 성향 및 통계 데이터를 조회
 def get_user_profile_for_ai(user_id: int):
     db = SessionLocal()

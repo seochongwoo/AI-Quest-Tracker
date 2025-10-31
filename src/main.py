@@ -3,14 +3,14 @@ FastAPI 인스턴스를 생성하고, /, /plot/user, /users/ 등 모든 API 엔�
 get_db() 함수를 통해 DB 세션을 각 요청에 주입하고, /users/ 라우트에서는 crud.py 함수를 호출하여 DB 작업을 수행
 '''
 # fast api 백엔드를 위한 import
-from fastapi import FastAPI, Depends, HTTPException, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query
 from typing import Annotated
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
 from . import crud, schemas, model
 # Db를 위한 import
-from .database import SessionLocal, init_db, QuestHistory
+from .database import SessionLocal, init_db, QuestHistory, Quest
 from . import crud, schemas
 #  AI 예측 및 시간 관리를 위한 임포트 추가
 from sklearn.preprocessing import OneHotEncoder 
@@ -646,374 +646,348 @@ def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
 
 
 # 특정 사용자 퀘스트 조회 추가
-@app.get("/users/{user_id}/quests/", response_model=list[schemas.Quest])
-def get_user_quests(user_id: int, db: Session = Depends(get_db)):
-    quests = crud.get_quests(db=db, user_id=user_id)
-    if not quests and crud.get_user(db, user_id) is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return quests
-
-# 퀘스트 목록 UI 엔드포인트
 @app.get("/quests/list", response_class=HTMLResponse)
 def quests_list(request: Request, db: Session = Depends(get_db)):
     user_id = request.cookies.get("user_id")
     if not user_id:
         return RedirectResponse(url="/login", status_code=303)
-    
-    user_id_int = int(user_id)
-    user = crud.get_user(db, user_id_int) 
 
+    user_id_int = int(user_id)
+    user = crud.get_user(db, user_id_int)
     if not user:
         return RedirectResponse(url="/logout", status_code=303)
 
-    user_name = user.name
     quests = crud.get_quests_by_user(db, user_id=user_id_int)
-    
-    # 기본 퀘스트 목록 출력
-    quest_list_html = ""
-    if quests:
-        for quest in quests:
-            status_text = " 완료" if quest.completed else " 미완료"
-            status_class = "completed" if quest.completed else "pending"
-            
-            ai_info_text = "AI 추천" if quest.ai_recommended else "직접 등록"
-            success_rate_percent = f"{quest.success_rate * 100:.1f}%" if quest.success_rate is not None else "N/A"
-            
-            quest_list_html += f"""
-            <div class="quest-item {status_class}">
-                <div class="quest-info">
-                    <span class="quest-name">{quest.name}</span>
-                    <span class="quest-meta">
-                        | 카테고리: {quest.category} 
-                        | 난이도: {quest.difficulty or 'N/A'} 
-                        | 목표: {quest.duration or 'N/A'}일 
-                        | AI 성공률: {success_rate_percent}
-                    </span>
-                    <p class="motivation-text">[{ai_info_text}] {quest.motivation or '동기 부여 문구 없음'}</p>
-                </div>
-                <div class="quest-actions">
-                    <span class="status-badge">{status_text}</span>
-                    <button class="toggle-btn" data-item-id="{quest.id}" data-completed="{quest.completed}">상태 변경</button> 
-                    <button class="delete-btn" data-item-id="{quest.id}">삭제</button>
-                </div>
-            </div>
-            """
-    else:
-        quest_list_html = "<p class='no-quest'>아직 등록된 퀘스트가 없습니다. 위에서 새로운 퀘스트를 추가해 보세요!</p>"
-
-    # 완료된 퀘스트 목록 분리
-    completed_quests = [q for q in quests if q.completed]
     active_quests = [q for q in quests if not q.completed]
+    completed_quests = [q for q in quests if q.completed]
 
-    # 진행 중인 퀘스트 HTML
-    active_quest_html = ""
-    if active_quests:
-        for quest in active_quests:
-            success_rate_percent = f"{quest.success_rate * 100:.1f}%"
-            active_quest_html += f"""
-            <div class="quest-item pending">
-                <div class="quest-info">
-                    <span class="quest-name">{quest.name}</span>
-                    <span class="quest-meta">
-                        | 카테고리: {quest.category} | 난이도: {quest.difficulty or 'N/A'} | 목표: {quest.duration or 'N/A'}일
-                    </span>
-                    <p class="motivation-text">[{ 'AI 추천' if quest.ai_recommended else '직접 등록'}] {quest.motivation or ''}</p>
-                </div>
-                <div class="quest-actions">
-                    <span class="status-badge">진행 중</span>
-                    <button class="toggle-btn" data-item-id="{quest.id}">완료로 변경</button> 
-                    <button class="delete-btn" data-item-id="{quest.id}">삭제</button>
+    total = len(quests)
+    completed = len(completed_quests)
+    completion_rate = (completed / total * 100) if total > 0 else 0
+
+    # AI 피드백 문장
+    if total == 0:
+        ai_message = "🚀 새로운 퀘스트로 첫 도전을 시작해보세요!"
+    elif completion_rate >= 80:
+        ai_message = "🔥 거의 완벽해요! 이제 더 어려운 도전도 괜찮을 것 같아요."
+    elif completion_rate >= 50:
+        ai_message = "💪 꾸준함이 보이네요. 남은 퀘스트도 완수해봐요!"
+    else:
+        ai_message = "🌱 오늘 하나만이라도 도전해볼까요?"
+
+    # 퀘스트 카드 렌더링 함수
+    def render_quest_card(q):
+        rate = f"{q.success_rate * 100:.1f}%" if q.success_rate else "-"
+        ai_tag = "🤖 AI 추천" if q.ai_recommended else "직접 등록"
+        duration = q.duration or 1
+        diff = q.difficulty or "-"
+        motivation = q.motivation or "동기 없음"
+        progress = getattr(q, "progress", 0.0)
+        category_emoji = {
+            "health": "💪", "study": "📚", "reading": "📖",
+            "work": "💼", "hobby": "🎨", "exercise": "🏋️‍♂️"
+        }.get(q.category, "🎯")
+
+        if q.completed:
+            days = (q.completed_at - q.created_at).days if q.completed_at else "-"
+            status = f"<span class='status completed'>✅ 완료 ({days}일)</span>"
+            card_class = "completed"
+        else:
+            status = f"<span class='status active'>🕓 진행 중 ({progress:.0f}%)</span>"
+            card_class = "active"
+
+        return f"""
+        <div class="quest-card {card_class}" data-id="{q.id}" data-duration="{duration}" data-progress="{progress}">
+            <div class="emoji">{category_emoji}</div>
+            <div class="info">
+                <h3>{q.name}</h3>
+                <p>{ai_tag} | 성공률: {rate} | 난이도: {diff} | 목표: {duration}일</p>
+                <p class="motivation">"{motivation}"</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {progress}%;"></div>
                 </div>
             </div>
-            """
-    else:
-        active_quest_html = "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
-
-    # 완료된 퀘스트 HTML
-    completed_quest_html = ""
-    if completed_quests:
-        completed_quests.sort(key=lambda q: q.completed_at or q.created_at, reverse=True)
-        for quest in completed_quests[:5]:  # 최근 5개까지만 보여주기
-            days = (quest.completed_at - quest.created_at).days if quest.completed_at else "-"
-            completed_quest_html += f"""
-            <div class="quest-item completed">
-                <div class="quest-info">
-                    <span class="quest-name">{quest.name}</span>
-                    <span class="quest-meta">
-                        | 카테고리: {quest.category} | 난이도: {quest.difficulty or 'N/A'} | 기간: {days}일 | 성공률: {quest.success_rate * 100:.1f}%
-                    </span>
-                    <p class="motivation-text">"{quest.motivation or '동기 없음'}"</p>
-                </div>
-                <div class="quest-actions">
-                    <span class="status-badge">✅ 완료</span>
-                    <button class="delete-btn" data-item-id="{quest.id}">삭제</button>
-                </div>
+            <div class="actions">
+                {status}
+                <button class="toggle-btn" data-item-id="{q.id}">
+                    {'🔁 미완료로 변경' if q.completed else '✅ 완료로 변경'}
+                </button>
+                <button class="delete-btn" data-item-id="{q.id}">🗑 삭제</button>
             </div>
-            """
-    else:
-        completed_quest_html = "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
+        </div>
+        """
 
+    active_html = "".join(render_quest_card(q) for q in active_quests) or "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
+    completed_html = "".join(render_quest_card(q) for q in completed_quests) or "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
 
-    # 최종 HTML 렌더링
+    # HTML
     html = f"""
     <html>
     <head>
-        <title>퀘스트 관리 - AI Quest Tracker</title>
+        <title>나의 퀘스트</title>
         <style>
-            body {{ font-family: 'Segoe UI', sans-serif; background-color: #f9fafc; margin: 0; padding: 0; text-align: center; color: #222; }}
-            header {{ background: linear-gradient(120deg, #02071e, #030928); color: white; padding: 30px 0; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }}
-            h1 {{ font-size: 2em; margin: 0; }}
-            .desc {{ font-size: 1em; color: #ddd; margin-top: 5px; }}
-            .back-link {{ color: #a0a0ff; text-decoration: none; font-weight: bold; margin-top: 10px; display: inline-block; }}
-
-            .content-container {{
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background: #f8f9fc;
+                margin: 0;
+                color: #222;
+            }}
+            header {{
+                background: linear-gradient(135deg, #02071e, #030928);
+                color: white;
+                padding: 30px 0;
+                text-align: center;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+            }}
+            .stats {{
                 display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 30px;
-                margin: 40px auto;
+                justify-content: center;
+                gap: 25px;
+                margin-top: 10px;
+                font-size: 0.95em;
+                color: #ddd;
+            }}
+            .ai-feedback {{
+                background: #fff9e6;
+                border-left: 5px solid #ffd43b;
+                color: #555;
+                margin: 25px auto;
+                max-width: 700px;
+                padding: 15px;
+                border-radius: 8px;
+                font-style: italic;
+                text-align: center;
+            }}
+            .content {{
                 max-width: 800px;
+                margin: 30px auto;
+                padding: 0 20px;
             }}
-
-            .add-quest-card {{
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                padding: 30px;
-                width: 100%;
-                text-align: left;
-            }}
-            .add-quest-card h2 {{ color: #02071e; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }}
-            .add-quest-card label {{ display: block; margin-top: 15px; font-weight: bold; font-size: 0.95em; color: #444; }}
-            .add-quest-card input, .add-quest-card select, .add-quest-card textarea {{ 
-                width: 100%; 
-                padding: 10px; 
-                margin-top: 5px; 
-                border-radius: 6px; 
-                border: 1px solid #ccc; 
-                box-sizing: border-box; 
-                font-size: 1em;
-            }}
-            .add-quest-card button {{ 
-                width: 100%; 
-                margin-top: 25px; 
-                padding: 12px; 
-                background-color: #030928; 
-                color: white; 
-                border: none; 
-                border-radius: 6px; 
-                cursor: pointer; 
-                font-size: 1.1em;
-                transition: background-color 0.2s;
-            }}
-            .add-quest-card button:hover {{ background-color: #02071e; }}
-            
-            .quest-list-section {{
-                width: 100%;
-                text-align: left;
-            }}
-            .quest-item {{ 
-                background: white; 
-                border: 1px solid #eee; 
-                padding: 15px; 
-                margin-bottom: 15px; 
-                border-radius: 8px; 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: center; 
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
-                transition: border-left 0.3s ease;
-            }}
-            .quest-item.completed {{ border-left: 5px solid #28a745; }}
-            .quest-item.pending {{ border-left: 5px solid #ffc107; }}
-            .quest-info {{ flex-grow: 1; }}
-            .quest-name {{ font-weight: bold; font-size: 1.1em; color: #02071e; margin-right: 10px; }}
-            .quest-meta {{ font-size: 0.85em; color: #777; }}
-            .motivation-text {{ font-size: 0.9em; color: #555; margin-top: 5px; font-style: italic; }}
-
-            .status-badge {{ 
-                padding: 4px 8px; 
-                border-radius: 12px; 
-                font-size: 0.8em; 
-                font-weight: bold; 
-                margin-right: 10px;
-                display: inline-block;
-            }}
-            .quest-item.completed .status-badge {{ background-color: #e6f6ec; color: #28a745; }}
-            .quest-item.pending .status-badge {{ background-color: #fff4e0; color: #ffc107; }}
-            
-            .toggle-btn, .delete-btn {{ 
-                background-color: #030928; 
-                color: white; 
-                border: none; 
-                padding: 8px 12px; 
-                border-radius: 6px; 
-                cursor: pointer; 
-                margin-left: 5px; 
-                font-size: 0.9em; 
-                transition: background-color 0.2s;
-            }}
-            .toggle-btn:hover {{ background-color: #02071e; }}
-            .delete-btn {{ background-color: #dc3545; }}
-            .delete-btn:hover {{ background-color: #c82333; }}
-            
-            .no-quest {{ text-align:center; padding:30px; color:#777; font-style: italic; }}
-
-            .quest-list-section h2 {{
-                color: #02071e;
+            h2 {{
                 border-left: 6px solid #030928;
                 padding-left: 10px;
+                color: #030928;
+                margin-top: 40px;
             }}
-
-            .quest-item.completed {{
-                background: #f7fdf8;
-                border-left: 5px solid #28a745;
-            }}
-            .quest-item.pending {{
-                background: #fffdf4;
-                border-left: 5px solid #ffc107;
-            }}
-            .quest-item:hover {{
-                transform: translateY(-3px);
+            .quest-card {{
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                margin: 15px 0;
+                display: flex;
+                align-items: center;
+                padding: 15px;
                 transition: transform 0.2s;
             }}
+            .quest-card:hover {{ transform: translateY(-3px); cursor: pointer; }}
+            .quest-card.active {{ border-left: 5px solid #007bff; }}
+            .quest-card.completed {{ border-left: 5px solid #28a745; background: #f7fdf8; }}
+            .emoji {{ font-size: 2em; width: 50px; text-align: center; }}
+            .info h3 {{ margin: 0; color: #111; font-size: 1.1em; }}
+            .progress-bar {{
+                width: 100%; background: #eee; border-radius: 6px;
+                height: 8px; margin-top: 8px; overflow: hidden;
+            }}
+            .progress-fill {{
+                height: 100%; background: #007bff; width: 0%;
+                transition: width 0.3s ease-in-out;
+            }}
+            .status.active {{ color: #007bff; font-weight: bold; }}
+            .status.completed {{ color: #28a745; }}
+            button {{
+                background: #02071e; color: white; border: none;
+                border-radius: 6px; padding: 7px 10px; font-size: 0.85em;
+                cursor: pointer; margin-left: 5px;
+            }}
+            .delete-btn {{ background: #dc3545; }}
+            .no-quest {{ text-align: center; color: #777; font-style: italic; }}
+
+            /* 추가 폼 */
+            .add-form {{
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+                padding: 25px;
+                margin-top: 40px;
+            }}
+            .add-form input, .add-form select, .add-form textarea {{
+                width: 100%;
+                margin: 8px 0;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+            }}
+            .add-form button {{
+                background: #030928;
+                color: white;
+                border: none;
+                width: 100%;
+                padding: 12px;
+                border-radius: 6px;
+                font-size: 1em;
+                cursor: pointer;
+            }}
+
+            /* 진행률 모달 */
+            .modal {{
+                position: fixed; top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex; justify-content: center; align-items: center;
+            }}
+            .modal.hidden {{ display: none; }}
+            .modal-content {{
+                background: white; padding: 20px; border-radius: 10px;
+                width: 320px; text-align: center;
+            }}
+            #progress-grid {{
+                display: grid; grid-template-columns: repeat(auto-fill, 30px);
+                gap: 5px; justify-content: center; margin-top: 15px;
+            }}
+            .progress-cell {{
+                width: 30px; height: 30px; background: #eee;
+                border-radius: 5px; cursor: pointer;
+            }}
+            .progress-cell.checked {{ background: #007bff; }}
         </style>
     </head>
     <body>
         <header>
-            <h1>퀘스트 관리</h1>
-            <p class="desc">현재 {user_name}님의 진행 중인 퀘스트 목록입니다.</p>
-            <a href="/" class="back-link">← 메인 화면으로 돌아가기</a>
+            <h1>🌟 {user.name}님의 퀘스트 보드</h1>
+            <div class="stats">
+                <span>총 퀘스트: {total}</span>
+                <span>완료: {completed}</span>
+                <span>달성률: {completion_rate:.1f}%</span>
+            </div>
         </header>
 
-        <div class="content-container">
-            
-            <div class="add-quest-card">
-                <h2>새로운 퀘스트 등록</h2>
+        <div class="ai-feedback">{ai_message}</div>
+        <div class="content">
+            <h2>🟢 진행 중</h2>{active_html}
+            <h2>🏁 완료</h2>{completed_html}
+
+            <div class="add-form">
+                <h2>➕ 새로운 퀘스트 추가</h2>
                 <form id="quest-form">
                     <input type="hidden" name="user_id" value="{user_id_int}">
-                    
-                    <label for="name">퀘스트 이름/설명 (필수)</label>
-                    <input type="text" id="name" name="name" placeholder="예: 매일 30분 운동하기" required>
-
-                    <label for="category">카테고리 (필수)</label>
-                    <select id="category" name="category" required>
-                        <option value="health">Health</option>
-                        <option value="study">Study</option>
-                        <option value="exercise">Exercise</option>
-                        <option value="reading">Reading</option>
-                        <option value="work">Work</option>
-                        <option value="hobby">Hobby</option>
-                        <option value="general">General</option>
+                    <input type="text" name="name" placeholder="예: 매일 30분 운동하기" required>
+                    <select name="category">
+                        <option value="exercise">운동</option>
+                        <option value="study">공부</option>
+                        <option value="reading">독서</option>
+                        <option value="work">일</option>
+                        <option value="hobby">취미</option>
+                        <option value="health">건강</option>
+                        <option value="general">일반</option>
                     </select>
-                    
-                    <label for="duration">기간 (일, 선택)</label>
-                    <input type="number" id="duration" name="duration" min="1" placeholder="예: 7 (7일 목표)">
-                    
-                    <label for="difficulty">난이도 (1~5, 선택)</label>
-                    <input type="number" id="difficulty" name="difficulty" min="1" max="5" placeholder="예: 3">
-                    
-                    <label for="motivation">동기 부여 문구 (선택)</label>
-                    <textarea id="motivation" name="motivation" rows="2" placeholder="이 퀘스트를 달성해야 하는 이유를 적어주세요."></textarea>
-                    
-                    <button type="submit">AI 성공률 예측 및 퀘스트 추가</button>
+                    <input type="number" name="duration" placeholder="기간 (일)" min="1">
+                    <input type="number" name="difficulty" placeholder="난이도 (1~5)" min="1" max="5">
+                    <textarea name="motivation" placeholder="동기 부여 문구 (선택)"></textarea>
+                    <button type="submit">AI 성공률 예측 및 추가</button>
                 </form>
             </div>
-            
-            <div class="quest-list-section">
-                <h2>📝 현재 진행 중인 퀘스트 목록</h2>
-                {quest_list_html}
-            </div>
+        </div>
 
-            <div class="quest-list-section">
-                <h2>🏁 완료된 퀘스트 아카이브</h2>
-                <p style="color:#777; font-size:0.9em;">최근 완료한 퀘스트들을 모아봤어요!</p>
-                {completed_quest_html}
+        <!-- 진행률 관리 모달 -->
+        <div id="progress-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3 id="modal-quest-name"></h3>
+                <div id="progress-grid"></div>
+                <button id="close-modal">닫기</button>
             </div>
-    </div>
         </div>
 
         <script>
-        // 퀘스트 추가 처리 (POST /quests/)
+        // 퀘스트 추가
         document.getElementById('quest-form').addEventListener('submit', async (e) => {{
             e.preventDefault();
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form).entries());
-            
-            // 데이터 타입 변환
+            const data = Object.fromEntries(new FormData(e.target).entries());
             data.user_id = parseInt(data.user_id);
-            data.name = data.name || data.category;
-            data.duration = data.duration ? parseInt(data.duration) : null;
+            data.duration = data.duration ? parseInt(data.duration) : 1;
             data.difficulty = data.difficulty ? parseInt(data.difficulty) : null;
-            data.motivation = data.motivation || null;
-
             const res = await fetch("/quests/", {{
                 method: "POST",
                 headers: {{ "Content-Type": "application/json" }},
                 body: JSON.stringify(data),
                 credentials: "include"
             }});
+            if (res.ok) location.reload();
+            else alert("퀘스트 추가 실패");
+        }});
 
-            if (res.ok) {{
-                alert("퀘스트가 성공적으로 등록되었습니다. AI 예측 성공률을 확인해 보세요!");
+        // 진행률 모달
+        const modal = document.getElementById("progress-modal");
+        const grid = document.getElementById("progress-grid");
+        const modalName = document.getElementById("modal-quest-name");
+        const closeModal = document.getElementById("close-modal");
+
+        document.querySelectorAll('.quest-card.active').forEach(card => {{
+            card.addEventListener('click', (e) => {{
+                if (e.target.classList.contains('toggle-btn') || e.target.classList.contains('delete-btn')) return;
+                const id = card.dataset.id;
+                const duration = parseInt(card.dataset.duration);
+                const progress = parseFloat(card.dataset.progress);
+                modalName.innerText = card.querySelector('h3').innerText + " 진행 관리";
+
+                grid.innerHTML = '';
+                const checkedCells = Math.round((progress / 100) * duration);
+                for (let i = 1; i <= duration; i++) {{
+                    const cell = document.createElement('div');
+                    cell.classList.add('progress-cell');
+                    if (i <= checkedCells) cell.classList.add('checked');
+                    cell.addEventListener('click', async () => {{
+                        cell.classList.toggle('checked');
+                        const done = grid.querySelectorAll('.checked').length;
+                        const newProgress = parseFloat(((done / duration) * 100).toFixed(1));
+
+                        const res = await fetch(`/quests/${{id}}/progress?progress=${{newProgress}}`, {{
+                            method: "PATCH",
+                            credentials: "include"
+                        }});
+                        
+                        if (res.ok) {{
+                            // 실시간 업데이트
+                            card.querySelector('.progress-fill').style.width = newProgress + "%";
+                            card.dataset.progress = newProgress;
+                            card.querySelector('.status').innerText = `🕓 진행 중 (${{newProgress}}%)`;
+                        }} else {{
+                            alert("진행률 업데이트 실패");
+                        }}
+                    }});
+                    grid.appendChild(cell);
+                }}
+                modal.classList.remove('hidden');
+            }});
+        }});
+        closeModal.addEventListener('click', () => modal.classList.add('hidden'));
+
+        // 완료 토글 / 삭제
+        document.querySelectorAll('.toggle-btn').forEach(btn => {{
+            btn.addEventListener('click', async e => {{
+                e.stopPropagation();
+                const id = e.target.dataset.itemId;
+                await fetch(`/quests/${{id}}/toggle`, {{ method: "PATCH", credentials: "include" }});
                 location.reload();
-            }} else {{
-                const errorData = await res.json();
-                alert("퀘스트 추가 실패: " + (errorData.detail || "서버 오류"));
-            }}
-        }});
-
-        // 퀘스트 상태 토글 처리 (PATCH /quests/{{quest_id}}/toggle)
-        document.querySelectorAll('.toggle-btn').forEach(button => {{
-            button.addEventListener('click', async (e) => {{
-                const itemId = e.currentTarget.getAttribute('data-item-id');
-                
-                if (!itemId) {{
-                    console.error("Error: item ID is missing for toggle.");
-                    alert("퀘스트 ID를 찾을 수 없습니다.");
-                    return;
-                }}
-
-                const res = await fetch(`/quests/${{itemId}}/toggle`, {{
-                    method: "PATCH",
-                    credentials: "include"
-                }});
-
-                if (res.ok) location.reload();
-                else alert("상태 변경 실패");
             }});
         }});
-
-        //퀘스트 삭제 처리 (DELETE /quests/{{quest_id}})
-        document.querySelectorAll('.delete-btn').forEach(button => {{
-            button.addEventListener('click', async (e) => {{
-                if (!confirm("정말로 이 퀘스트를 삭제하시겠습니까?")) return;
-                
-                const itemId = e.currentTarget.getAttribute('data-item-id');
-                
-                if (!itemId) {{
-                    console.error("Error: item ID is missing for delete.");
-                    alert("퀘스트 ID를 찾을 수 없습니다.");
-                    return;
-                }}
-
-                const res = await fetch(`/quests/${{itemId}}`, {{
-                    method: "DELETE",
-                    credentials: "include"
-                }});
-
-                if (res.ok) location.reload();
-                else alert("삭제 실패");
+        document.querySelectorAll('.delete-btn').forEach(btn => {{
+            btn.addEventListener('click', async e => {{
+                e.stopPropagation();
+                if (!confirm("정말 삭제하시겠습니까?")) return;
+                const id = e.target.dataset.itemId;
+                await fetch(`/quests/${{id}}`, {{ method: "DELETE", credentials: "include" }});
+                location.reload();
             }});
         }});
-    </script>
+        </script>
     </body>
     </html>
     """
     return HTMLResponse(html)
 
-# 퀘스트 완료 토글 (PATCH)
 
+
+# 퀘스트 완료 토글 (PATCH)
 @app.patch("/quests/{quest_id}/toggle")
 def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db)):
     user_id = request.cookies.get("user_id")
@@ -1024,41 +998,60 @@ def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found or not yours")
 
+    # 현재 상태 반전
+    previous_state = quest.completed
     quest.completed = not quest.completed
 
-    # 완료로 변경하는 경우
+    # UTC 일관성 유지
+    if quest.created_at.tzinfo is None:
+        quest.created_at = quest.created_at.replace(tzinfo=timezone.utc)
+
+    # 완료로 변경된 경우
     if quest.completed:
         quest.completed_at = datetime.now(timezone.utc)
-    
-        if quest.created_at.tzinfo is None:
-            quest.created_at = quest.created_at.replace(tzinfo=timezone.utc)
-    
+        duration_days = max((quest.completed_at - quest.created_at).days, 1)
 
-        days = (quest.completed_at - quest.created_at).days
-        duration_days = max(days, 1)
-
-        history_entry = QuestHistory(
-            quest_id=quest.id,
-            user_id=quest.user_id,
-            action="completed",
-            progress=1.0,
-            completed_at=quest.completed_at,
-            duration_days=duration_days,
-            timestamp=datetime.now(timezone.utc),
+        # 기존 completed 로그가 있으면 새로 추가하지 않음
+        last_log = (
+            db.query(QuestHistory)
+            .filter(QuestHistory.quest_id == quest.id)
+            .order_by(QuestHistory.timestamp.desc())
+            .first()
         )
-        db.add(history_entry)
 
-    # 미완료로 되돌리는 경우
+        if not last_log or last_log.action != "completed":
+            history_entry = QuestHistory(
+                quest_id=quest.id,
+                user_id=quest.user_id,
+                action="completed",
+                progress=1.0,
+                completed_at=quest.completed_at,
+                duration_days=duration_days,
+                timestamp=datetime.now(timezone.utc),
+            )
+            db.add(history_entry)
+
+    # 미완료로 되돌린 경우
     else:
         quest.completed_at = None
-        history_entry = QuestHistory(
-            quest_id=quest.id,
-            user_id=quest.user_id,
-            action="reopened",
-            progress=0.0,
-            timestamp=datetime.now(timezone.utc),
+
+        # 최근 로그가 이미 reopened이면 중복 추가 안 함
+        last_log = (
+            db.query(QuestHistory)
+            .filter(QuestHistory.quest_id == quest.id)
+            .order_by(QuestHistory.timestamp.desc())
+            .first()
         )
-        db.add(history_entry)
+
+        if not last_log or last_log.action != "reopened":
+            history_entry = QuestHistory(
+                quest_id=quest.id,
+                user_id=quest.user_id,
+                action="reopened",
+                progress=0.0,
+                timestamp=datetime.now(timezone.utc),
+            )
+            db.add(history_entry)
 
     db.commit()
     db.refresh(quest)
@@ -1083,6 +1076,41 @@ def delete_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
     db.delete(quest)
     db.commit()
     return {"detail": "Deleted"}
+
+# 진행률 표시 
+@app.patch("/quests/{quest_id}/progress")
+async def update_progress(
+    quest_id: int, 
+    progress: float = Query(...),  
+    db: Session = Depends(get_db)
+):
+    quest = db.query(Quest).filter(Quest.id == quest_id).first()
+    if not quest:
+        raise HTTPException(status_code=404, detail="Quest not found")
+
+    quest.progress = progress
+
+    # QuestHistory 기록
+    last_log = (
+        db.query(QuestHistory)
+        .filter(QuestHistory.quest_id == quest.id)
+        .order_by(QuestHistory.timestamp.desc())
+        .first()
+    )
+    if not last_log or last_log.progress != progress:
+        db.add(
+            QuestHistory(
+                quest_id=quest.id,
+                user_id=quest.user_id,
+                action="progress_update",
+                progress=progress,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+
+    db.commit()
+    db.refresh(quest)
+    return {"progress": progress}
 
 #-----recommend 페이지-----
 # AI 퀘스트 추천 페이지
