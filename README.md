@@ -13,9 +13,10 @@
 1. [Getting Started](#getting-started)  
 2. [Features](#features)  
    1. [샘플 데이터](#샘플-데이터)  
-   2. [모델 학습](#모델-학습)  
-   3. [API 실행](#api-실행)  
-   4. [예측 결과](#예측-결과)  
+   2. [모델 학습](#모델-학습)
+   3. [주요 엔드포인트](#주요-엔드포인트)  
+   4. [API 실행](#api-실행)  
+   5. [예측 결과](#예측-결과)  
 3. [Demo](#demo)  
 4. [API Docs](#api-docs)  
 5. [기술 스택](#기술-스택)  
@@ -46,15 +47,8 @@ pip install -r requirements.txt
 
 ### Running
 ```bash
-# 1. 모델 학습 
-# model/model.pkl 파일을 생성합니다.
-python -m src.train
-
-# 2. FastAPI 실행 (서버 실행)
+# FastAPI 실행 (서버 실행)
 uvicorn src.main:app --reload
-
-# 3. 퀘스트 완료 혹은 삭제 후 train.py 다시 실행!
-python -m src.train
 ```
 
 - 실행 후: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) 접속하면 Swagger UI에서 API 확인 가능 ✅
@@ -64,8 +58,10 @@ python -m src.train
 ##  Features
 
 ###  샘플 데이터
-`seed.py`로 더미데이터 생성
+`seed.py`로 더미데이터 
+- GPT를 통한 현실적인 더미데이터 생성
 - 데이터베이스에 저장되는 레코드 예시
+
 ```csv
 user_id, name, category, duration, difficulty, completed, ...
 1,"퀘스트_1_health","health",7,3,1
@@ -88,9 +84,11 @@ dump((model, embedder), MODEL_PATH)
 ###  API 실행
 `src/main.py`  
 - FastAPI 서버 구동 시 model.py를 통해 model/model.pkl에서 학습된 모델을 로드합니다.
+
+### 주요 엔드포인트
 - /quests/list: 사용자별 퀘스트 목록 및 상태 토글/삭제 기능 제공
-- /recommend/result: 사용자의 로그인 ID를 기반으로 맞춤형 성공률 예측
-- /quests/ (POST): 퀘스트 생성 시 AI 모델을 통해 성공률을 예측하여 DB에 저장
+- /plot/dashboard: 사용자별 퀘스트 시각화 제공
+- /recommend/result: 사용자의 로그인 ID를 기반으로 Gemini를 통한 맞춤형 성공률 예측 및 조언
 
 ### 예측 결과
 ```python

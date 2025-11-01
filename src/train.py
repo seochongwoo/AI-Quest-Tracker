@@ -181,7 +181,7 @@ def train_model():
     rf = RandomForestClassifier(
         n_estimators=500,
         max_depth=18,
-        class_weight="balanced",
+        class_weight={0: 1.0, 1: 3.0},
         n_jobs=-1,
         random_state=42
     )

@@ -24,7 +24,29 @@ from .ai_recommend import generate_ai_recommendation
 from dotenv import load_dotenv
 load_dotenv()
 
-app = FastAPI(title="AI Quest Tracker API")
+### 서버 시작 시 자동으로 train.py 호출 
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+import subprocess
+import threading
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    def run_training():
+        subprocess.run(["python","-m", "src.train"], check=False)
+
+    # 서버 시작 시
+    threading.Thread(target=run_training, daemon=True).start()
+    print("✅ 서버 시작: 모델 학습 시작")
+
+    yield  # 서버 동작 중 대기
+
+    # 서버 종료 시
+    print("🛑 서버 종료: 모델 재학습 실행")
+    run_training()
+
+
+app = FastAPI(title="AI Quest Tracker API", lifespan=lifespan)
 MODEL_PATH = "model/model.pkl"
 
 # 앱  생성 직후 호출하여 서버 시작 전에 테이블 생성 (버그 방지)
@@ -729,7 +751,6 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
         """
 
     active_html = "".join(render_quest_card(q) for q in active_quests) or "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
-    completed_html = "".join(render_quest_card(q) for q in completed_quests) or "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
 
     html = f"""
     <html>
@@ -863,18 +884,20 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     </head>
     <body>
         <header>
-            <h1>🌟 {user.name}님의 퀘스트 보드</h1>
+            <h1>{user.name}님의 퀘스트 보드</h1>
             <div class="stats">
                 <span>총 퀘스트: {total}</span>
                 <span>완료: {completed}</span>
                 <span>달성률: {completion_rate:.1f}%</span>
             </div>
+            <a href="/" class="home-btn">🏠 홈으로</a>
         </header>
 
         <div class="ai-feedback">{ai_message}</div>
         <div class="content">
             <h2>🟢 진행 중</h2>{active_html}
-            <h2>🏁 완료</h2>{completed_html}
+            <h2>🏁 완료된 퀘스트</h2>
+            <p><a href="/quests/completed" class="link">여기로 이동 →</a></p>
 
             <div class="add-form">
                 <h2>➕ 새로운 퀘스트 추가</h2>
@@ -1002,7 +1025,177 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     """
     return HTMLResponse(html)
 
+# 완료된 퀘스트 페이지 분리
+@app.get("/quests/completed", response_class=HTMLResponse)
+def completed_quests_page(request: Request, db: Session = Depends(get_db)):
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
 
+    user_id_int = int(user_id)
+    user = crud.get_user(db, user_id_int)
+    if not user:
+        return RedirectResponse(url="/logout", status_code=303)
+
+    completed_quests = [q for q in crud.get_quests_by_user(db, user_id=user_id_int) if q.completed]
+
+    completed_html = "".join(f"""
+        <div class="quest-card completed" data-id="{q.id}">
+            <div class="emoji">🏁</div>
+            <div class="info">
+                <h3>{q.name}</h3>
+                <p>기간: {(q.completed_at - q.created_at).days if q.completed_at else '-'}일</p>
+                <p>성공률: {q.success_rate * 100:.1f}%</p>
+                <p class="motivation">"{q.motivation or '노력의 결과예요!'}"</p>
+            </div>
+            <div class="actions">
+                <button class="restore-btn" data-id="{q.id}">♻ 복원하기</button>
+            </div>
+        </div>
+    """ for q in completed_quests) or "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
+
+    return HTMLResponse(f"""
+    <html>
+    <head>
+        <title>완료된 퀘스트</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background: #f8f9fc;
+                margin: 0;
+                color: #222;
+            }}
+            header {{
+                background: linear-gradient(135deg, #02071e, #030928);
+                color: white;
+                padding: 30px 0;
+                text-align: center;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+            }}
+            header a {{
+                color: #ffd43b;
+                text-decoration: none;
+                font-size: 0.9em;
+                margin-top: 10px;
+                display: inline-block;
+            }}
+            .content {{
+                max-width: 800px;
+                margin: 40px auto;
+                padding: 0 20px;
+            }}
+            .quest-card {{
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                margin: 15px 0;
+                display: flex;
+                align-items: center;
+                padding: 15px;
+                border-left: 5px solid #28a745;
+                transition: transform 0.2s;
+                justify-content: space-between;
+            }}
+            .quest-card:hover {{
+                transform: translateY(-3px);
+            }}
+            .emoji {{
+                font-size: 2em;
+                width: 60px;
+                text-align: center;
+            }}
+            .info {{
+                flex: 1;
+                margin-left: 10px;
+            }}
+            .info h3 {{
+                margin: 0;
+                color: #111;
+                font-size: 1.1em;
+            }}
+            .info p {{
+                margin: 5px 0;
+                font-size: 0.9em;
+                color: #555;
+            }}
+            .motivation {{
+                font-style: italic;
+                color: #666;
+            }}
+            .actions {{
+                text-align: right;
+            }}
+            .restore-btn {{
+                background: #007bff;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 7px 12px;
+                font-size: 0.85em;
+                cursor: pointer;
+                transition: background 0.2s;
+            }}
+            .restore-btn:hover {{
+                background: #0056b3;
+            }}
+            .no-quest {{
+                text-align: center;
+                padding: 30px;
+                color: #777;
+                font-style: italic;
+            }}
+            footer {{
+                text-align: center;
+                margin: 50px 0 20px;
+                color: #888;
+                font-size: 0.9em;
+            }}
+            footer a {{
+                color: #007bff;
+                text-decoration: none;
+            }}
+            footer a:hover {{
+                text-decoration: underline;
+            }}
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>🏁 {user.name}님의 완료된 퀘스트</h1>
+            <a href="/quests/list">← 진행 중 퀘스트로 돌아가기</a>
+        </header>
+
+        <div class="content">
+            {completed_html}
+        </div>
+
+        <footer>
+            <p>🎉 수고하셨어요! 새로운 퀘스트에 다시 도전해볼까요?</p>
+            <a href="/quests/list">새 퀘스트 추가하기 →</a>
+        </footer>
+
+        <script>
+        // 복원 버튼 기능 (완료 → 미완료)
+        document.querySelectorAll('.restore-btn').forEach(btn => {{
+            btn.addEventListener('click', async e => {{
+                const id = e.target.getAttribute('data-id');
+                if (!confirm("이 퀘스트를 복원하시겠습니까?")) return;
+                const res = await fetch(`/quests/${{id}}/toggle`, {{
+                    method: "PATCH",
+                    credentials: "include"
+                }});
+                if (res.ok) {{
+                    alert("복원되었습니다!");
+                    location.reload();
+                }} else {{
+                    alert("복원 중 오류가 발생했습니다.");
+                }}
+            }});
+        }});
+        </script>
+    </body>
+    </html>
+    """)
 
 # 퀘스트 완료 토글 (PATCH)
 @app.patch("/quests/{quest_id}/toggle")
