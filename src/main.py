@@ -3,12 +3,13 @@ FastAPI 인스턴스를 생성하고, /, /plot/user, /users/ 등 모든 API 엔�
 get_db() 함수를 통해 DB 세션을 각 요청에 주입하고, /users/ 라우트에서는 crud.py 함수를 호출하여 DB 작업을 수행
 '''
 # fast api 백엔드를 위한 import
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query, Body
 from typing import Annotated
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
 from . import crud, schemas, model
+from pydantic import BaseModel
 # Db를 위한 import
 from .database import SessionLocal, init_db, QuestHistory, Quest
 from . import crud, schemas
@@ -645,7 +646,7 @@ def create_quest(quest: schemas.QuestCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="퀘스트 생성 중 오류가 발생했습니다.")
 
 
-# 특정 사용자 퀘스트 조회 추가
+# 특정 사용자 퀘스트 조회
 @app.get("/quests/list", response_class=HTMLResponse)
 def quests_list(request: Request, db: Session = Depends(get_db)):
     user_id = request.cookies.get("user_id")
@@ -665,7 +666,6 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     completed = len(completed_quests)
     completion_rate = (completed / total * 100) if total > 0 else 0
 
-    # AI 피드백 문장
     if total == 0:
         ai_message = "🚀 새로운 퀘스트로 첫 도전을 시작해보세요!"
     elif completion_rate >= 80:
@@ -675,14 +675,25 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     else:
         ai_message = "🌱 오늘 하나만이라도 도전해볼까요?"
 
-    # 퀘스트 카드 렌더링 함수
+    # QuestHistory에서 최신 progress 가져오기
+    def get_latest_progress(q):
+        last = (
+            db.query(QuestHistory)
+            .filter(QuestHistory.quest_id == q.id)
+            .order_by(QuestHistory.timestamp.desc())
+            .first()
+        )
+        if last:
+            return round(last.progress , 1)
+        return 0.0
+
     def render_quest_card(q):
+        progress = get_latest_progress(q)
         rate = f"{q.success_rate * 100:.1f}%" if q.success_rate else "-"
         ai_tag = "🤖 AI 추천" if q.ai_recommended else "직접 등록"
         duration = q.duration or 1
         diff = q.difficulty or "-"
         motivation = q.motivation or "동기 없음"
-        progress = getattr(q, "progress", 0.0)
         category_emoji = {
             "health": "💪", "study": "📚", "reading": "📖",
             "work": "💼", "hobby": "🎨", "exercise": "🏋️‍♂️"
@@ -697,7 +708,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             card_class = "active"
 
         return f"""
-        <div class="quest-card {card_class}" data-id="{q.id}" data-duration="{duration}" data-progress="{progress}">
+        <div class="quest-card {card_class}" data-quest-id="{q.id}" data-duration="{duration}" data-progress="{progress}">
             <div class="emoji">{category_emoji}</div>
             <div class="info">
                 <h3>{q.name}</h3>
@@ -720,7 +731,6 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     active_html = "".join(render_quest_card(q) for q in active_quests) or "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
     completed_html = "".join(render_quest_card(q) for q in completed_quests) or "<p class='no-quest'>아직 완료된 퀘스트가 없습니다.</p>"
 
-    # HTML
     html = f"""
     <html>
     <head>
@@ -888,7 +898,6 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
             </div>
         </div>
 
-        <!-- 진행률 관리 모달 -->
         <div id="progress-modal" class="modal hidden">
             <div class="modal-content">
                 <h3 id="modal-quest-name"></h3>
@@ -924,29 +933,34 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
         document.querySelectorAll('.quest-card.active').forEach(card => {{
             card.addEventListener('click', (e) => {{
                 if (e.target.classList.contains('toggle-btn') || e.target.classList.contains('delete-btn')) return;
-                const id = card.dataset.id;
+
+                const questId = card.dataset.questId;
                 const duration = parseInt(card.dataset.duration);
                 const progress = parseFloat(card.dataset.progress);
                 modalName.innerText = card.querySelector('h3').innerText + " 진행 관리";
 
                 grid.innerHTML = '';
                 const checkedCells = Math.round((progress / 100) * duration);
+
                 for (let i = 1; i <= duration; i++) {{
                     const cell = document.createElement('div');
                     cell.classList.add('progress-cell');
                     if (i <= checkedCells) cell.classList.add('checked');
+
                     cell.addEventListener('click', async () => {{
                         cell.classList.toggle('checked');
                         const done = grid.querySelectorAll('.checked').length;
                         const newProgress = parseFloat(((done / duration) * 100).toFixed(1));
+                        console.log("duration:", duration, "done:", done, "newProgress:", newProgress)
 
-                        const res = await fetch(`/quests/${{id}}/progress?progress=${{newProgress}}`, {{
+                        const res = await fetch(`/quests/${{questId}}/progress`, {{
                             method: "PATCH",
-                            credentials: "include"
+                            headers: {{ "Content-Type": "application/json" }},
+                            credentials: "include",
+                            body: JSON.stringify({{ progress: newProgress }})
                         }});
-                        
+
                         if (res.ok) {{
-                            // 실시간 업데이트
                             card.querySelector('.progress-fill').style.width = newProgress + "%";
                             card.dataset.progress = newProgress;
                             card.querySelector('.status').innerText = `🕓 진행 중 (${{newProgress}}%)`;
@@ -954,6 +968,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
                             alert("진행률 업데이트 실패");
                         }}
                     }});
+
                     grid.appendChild(cell);
                 }}
                 modal.classList.remove('hidden');
@@ -961,7 +976,7 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
         }});
         closeModal.addEventListener('click', () => modal.classList.add('hidden'));
 
-        // 완료 토글 / 삭제
+        // 완료 토글
         document.querySelectorAll('.toggle-btn').forEach(btn => {{
             btn.addEventListener('click', async e => {{
                 e.stopPropagation();
@@ -970,6 +985,8 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
                 location.reload();
             }});
         }});
+
+        // 삭제
         document.querySelectorAll('.delete-btn').forEach(btn => {{
             btn.addEventListener('click', async e => {{
                 e.stopPropagation();
@@ -1077,40 +1094,47 @@ def delete_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
     db.commit()
     return {"detail": "Deleted"}
 
-# 진행률 표시 
+# 진행률 표시
+class ProgressUpdate(BaseModel):
+    progress: float
+ 
 @app.patch("/quests/{quest_id}/progress")
 async def update_progress(
-    quest_id: int, 
-    progress: float = Query(...),  
+    quest_id: int,
+    body: ProgressUpdate,
     db: Session = Depends(get_db)
 ):
+    progress = round(body.progress, 1)
+
     quest = db.query(Quest).filter(Quest.id == quest_id).first()
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found")
 
     quest.progress = progress
+    db.commit()
+    db.refresh(quest)
 
-    # QuestHistory 기록
-    last_log = (
+    # 기록 남기기
+    last = (
         db.query(QuestHistory)
-        .filter(QuestHistory.quest_id == quest.id)
+        .filter(QuestHistory.quest_id == quest_id)
         .order_by(QuestHistory.timestamp.desc())
         .first()
     )
-    if not last_log or last_log.progress != progress:
+    if not last or abs(last.progress - quest.progress) >= 0.1:
         db.add(
             QuestHistory(
                 quest_id=quest.id,
                 user_id=quest.user_id,
                 action="progress_update",
-                progress=progress,
+                progress=quest.progress,
                 timestamp=datetime.now(timezone.utc),
             )
         )
+        db.commit()
 
-    db.commit()
-    db.refresh(quest)
-    return {"progress": progress}
+    return {"id": quest.id, "progress": quest.progress}
+
 
 #-----recommend 페이지-----
 # AI 퀘스트 추천 페이지
