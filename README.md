@@ -28,7 +28,7 @@
 ##  Getting Started
 
 ### API key 설정 방법
-1. Google AI Studio에서 Gemini API Key를 발급받습니다.
+1. [Google AI Studio](https://aistudio.google.com/)에서 Gemini API Key를 발급받습니다.
 2. 프로젝트 루트 경로에 `.env` 파일을 생성하고 아래 내용을 추가합니다.
 3. GEMINI_API_KEY="YOUR_API_KEY"
 
