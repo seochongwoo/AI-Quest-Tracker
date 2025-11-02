@@ -1,6 +1,7 @@
 '''
 DB 관리 및 데이터 구조 정의 (백본)
 SQLAlchemy를 사용하여 SQLite 파일(db.sqlite3)과 연결하는 엔진과 세션을 생성
+DB의 정확한 구조를 정의
 '''
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base

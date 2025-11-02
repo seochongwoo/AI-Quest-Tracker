@@ -688,14 +688,28 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
     completed = len(completed_quests)
     completion_rate = (completed / total * 100) if total > 0 else 0
 
+    streak = user.streak_days or 0
+
     if total == 0:
         ai_message = "🚀 새로운 퀘스트로 첫 도전을 시작해보세요!"
-    elif completion_rate >= 80:
-        ai_message = "🔥 거의 완벽해요! 이제 더 어려운 도전도 괜찮을 것 같아요."
-    elif completion_rate >= 50:
-        ai_message = "💪 꾸준함이 보이네요. 남은 퀘스트도 완수해봐요!"
+    elif streak == 0:
+        ai_message = "오늘 다시 시작해볼까요? 꾸준함이 힘이에요!"
+    elif streak < 3:
+        ai_message = f"{streak}일 연속 도전 중이에요! 작은 습관이 큰 변화를 만들어요."
+    elif streak < 7:
+        ai_message = f"{streak}일째 성장 중이에요! 이 페이스라면 멀지 않았어요."
+    elif streak < 30:
+        ai_message = f"{streak}일 연속! 놀라운 꾸준함이에요!"
     else:
-        ai_message = "🌱 오늘 하나만이라도 도전해볼까요?"
+        ai_message = f"🌟 {streak}일 연속 달성! 전설적인 성취예요."
+
+    # ✅ 완료율 보조 메시지 (보완용)
+    if completion_rate >= 80:
+        ai_message += " 🎯 거의 완벽해요! 새로운 도전도 괜찮겠어요."
+    elif completion_rate >= 50:
+        ai_message += " 💪 절반 이상 완수했어요. 끝까지 가봅시다!"
+    else:
+        ai_message += " 🚀 오늘은 하나만이라도 도전해볼까요?"
 
     # QuestHistory에서 최신 progress 가져오기
     def get_latest_progress(q):
@@ -1241,6 +1255,13 @@ def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
             )
             db.add(history_entry)
 
+        # streak day 로직 추가
+        streak = crud.calculate_streak_days(db, int(user_id))
+        user = crud.get_user(db, int(user_id))
+        if user:
+            user.streak_days = streak
+            db.commit()
+
     # 미완료로 되돌린 경우
     else:
         quest.completed_at = None
@@ -1262,6 +1283,14 @@ def toggle_quest(quest_id: int, request: Request, db: Session = Depends(get_db))
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(history_entry)
+
+        # 미완료로 바뀐 경우 streak 다시 계산
+        streak = crud.calculate_streak_days(db, int(user_id))
+        user = crud.get_user(db, int(user_id))
+        if user:
+            user.streak_days = streak
+            db.commit()
+
 
     db.commit()
     db.refresh(quest)

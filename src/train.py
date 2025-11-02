@@ -65,7 +65,6 @@ def get_user_statistics_df(db):
             user.completed_quests = completed
             user.average_success_rate = avg_success if avg_success is not None else 0.0
             user.preferred_category = preferred_categories.get(user_id)
-            # Note: streak_days는 복잡한 시계열 계산이 필요하여, 여기서는 업데이트하지 않습니다.
     
     db.commit() # DB에 변경사항 영구 저장
 
@@ -136,7 +135,7 @@ def train_model():
 
     embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-    print("임베딩 생성 중 (한국어 포함)...")
+    print("임베딩 생성 중 ...")
 
     text_features = df["name"].astype(str) + " " + df["motivation"].astype(str)
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .database import User, Quest, QuestHistory, SessionLocal
 from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ----------------------------
 # User CRUD 함수
@@ -28,6 +28,32 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     db.refresh(db_user) # ID와 같은 자동 생성된 값을 로드
     return db_user
+
+# 사용자의 연속 퀘스트 수행 일수를 계산
+def calculate_streak_days(db: Session, user_id: int) -> int:
+    completions = db.query(QuestHistory.timestamp).filter(
+        QuestHistory.user_id == user_id,
+        QuestHistory.action == "completed"
+    ).order_by(QuestHistory.timestamp.asc()).all()
+
+    if not completions:
+        return 0
+
+    dates = [c[0].date() for c in completions]
+    streak = 1
+    max_streak = 1
+
+    for i in range(1, len(dates)):
+        if (dates[i] - dates[i - 1]) == timedelta(days=1):
+            streak += 1
+        elif dates[i] != dates[i - 1]:
+            streak = 1
+        max_streak = max(max_streak, streak)
+
+    # 최근 완료일이 어제거나 오늘이면 유지, 아니면 0으로 리셋
+    if dates[-1] < datetime.now().date() - timedelta(days=1):
+        return 0
+    return streak
 
 # ----------------------------
 # Quest CRUD 함수

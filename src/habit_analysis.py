@@ -39,8 +39,8 @@ def plot_user_progress(db: Session, user_id: int):
     # 완료 상태 비율 시각화
     fig, ax = plt.subplots(figsize=(5, 4))
     df['completed'].value_counts().plot(
-        kind='pie', autopct='%1.0f%%', colors=['lightcoral', 'lightgreen'],
-        labels=['미완료', '완료'], startangle=90, ax=ax
+        kind='pie', autopct='%1.0f%%', colors=['lightgreen', 'lightcoral'],
+        labels=['완료', '미완료'], startangle=90, ax=ax
     )
     ax.set_title("📊 완료/미완료 비율")
     plt.tight_layout()

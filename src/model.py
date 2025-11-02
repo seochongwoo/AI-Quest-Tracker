@@ -93,11 +93,8 @@ def load_ml_model():
                 # 3차 시도: CPU-safe 로더에서도 오류(STACK_GLOBAL) 발생 시, 폴백 실행
                 print(f"재시도 중에도 오류 발생: {e_cpu}")
                 
-                # [핵심 수정: 폴백 로직] ML_MODEL(Scikit-learn)만 로드하고 EMBEDDER는 수동 재구성
+                # ML_MODEL(Scikit-learn)만 로드하고 EMBEDDER는 수동 재구성
                 try:
-                    # ML_MODEL만 joblib으로 로드 시도 (PyTorch 객체 로딩 실패를 무시)
-                    # NOTE: 이 코드는 train.py가 (ML_MODEL, EMBEDDER) 튜플을 저장했다는 가정을 깨고,
-                    # ML_MODEL이 파일의 첫 번째 객체라고 가정하여 안전하게 로드합니다.
                     print("⚠️ Scikit-learn 모델만 로드하고 임베더는 수동 재구성하여 오류를 우회합니다.")
                     
                     # 파일 전체를 joblib.load로 로드하면 여전히 오류가 발생할 수 있으므로, 
