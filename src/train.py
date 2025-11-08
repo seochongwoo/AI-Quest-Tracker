@@ -18,7 +18,6 @@ from src.utils import load_data
 from src.database import init_db, SessionLocal, User, QuestHistory, Quest
 from sqlalchemy import func
 from sqlalchemy.sql import case
-from datetime import datetime
 import torch
 
 MODEL_PATH = "model/model.pkl"
