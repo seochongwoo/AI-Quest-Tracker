@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ emoji }} {{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root { --primary: #02071e; --accent: #030928; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            margin: 0; padding: 0; min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        header {
+            background: linear-gradient(120deg, var(--primary), var(--accent));
+            width: 100%; padding: 40px 20px; text-align: center;
+            color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        h1 { margin: 0; font-size: 2.2em; font-weight: 700; }
+        .desc { margin: 10px 0 0; color: #e2e8f0; font-size: 1.1em; }
+
+        .plot-container {
+            background: white; margin: 40px 20px; padding: 30px;
+            border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+            max-width: 800px; width: 100%; text-align: center;
+        }
+        img {
+            width: 100%; max-width: 700px; border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            margin-top: 20px;
+        }
+        .no-data {
+            font-size: 1.3em; color: #666; padding: 60px 20px;
+            background: #f8f9fa; border-radius: 12px; margin: 40px 20px;
+        }
+
+        footer {
+            margin-top: auto; padding: 30px; text-align: center; color: #777;
+            width: 100%; border-top: 1px solid #eee;
+        }
+        a { color: #5a67d8; text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ emoji }} {{ title }}</h1>
+        <p class="desc">{{ desc }}</p>
+    </header>
+
+    <div class="plot-container">
+        {% if img_base64 %}
+            <img src="data:image/png;base64,{{ img_base64 }}" alt="{{ title }}">
+        {% else %}
+            <div class="no-data">
+                {{ message | default("데이터가 없습니다. 퀘스트를 먼저 추가하세요!") }}
+            </div>
+        {% endif %}
+    </div>
+
+    <footer>
+        <a href="/plot/dashboard">대시보드로 돌아가기</a> |
+        <a href="/">홈으로</a>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>데이터 시각화</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary: #02071e;
+            --accent: #030928;
+            --text: #222;
+            --bg: #f9fafc;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            margin: 0; padding: 0; color: var(--text);
+            min-height: 100vh;
+        }
+        header {
+            background: linear-gradient(120deg, var(--primary), var(--accent));
+            color: white; padding: 50px 20px;
+            text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        h1 { margin: 0; font-size: 2.4em; font-weight: 700; }
+        .desc { color: #e2e8f0; margin: 10px 0 0; font-size: 1.1em; }
+
+        .container {
+            max-width: 1000px; margin: 60px auto; padding: 0 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 30px;
+        }
+        .card {
+            background: white; border-radius: 16px;
+            padding: 30px; text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .card h2 {
+            color: var(--primary); margin: 0 0 12px; font-size: 1.4em;
+        }
+        .card p { color: #666; line-height: 1.6; margin-bottom: 20px; }
+        .card a {
+            display: inline-block; padding: 12px 24px;
+            background: var(--accent); color: white;
+            text-decoration: none; border-radius: 8px;
+            font-weight: 600; font-size: 0.95em;
+            transition: 0.3s;
+        }
+        .card a:hover { background: #02071e; transform: scale(1.05); }
+
+        footer {
+            text-align: center; padding: 40px 20px; color: #888;
+            font-size: 0.95em; border-top: 1px solid #eee; margin-top: 80px;
+        }
+        .home-link { color: #5a67d8; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>데이터 시각화 대시보드</h1>
+        <p class="desc">내 성취를 한눈에! AI 분석과 함께 성장하세요</p>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>개인 퀘스트 현황</h2>
+            <p>완료 vs 미완료 비율을 파이 차트로 확인</p>
+            <a href="/plot/user">보기</a>
+        </div>
+
+        <div class="card">
+            <h2>카테고리별 성공률</h2>
+            <p>AI 예측 정확도를 카테고리별로 비교</p>
+            <a href="/plot/quest">보기</a>
+        </div>
+
+        <div class="card">
+            <h2>성장 추세 그래프</h2>
+            <p>시간에 따른 완료 퀘스트 수 변화</p>
+            <a href="/plot/trend">보기</a>
+        </div>
+
+        <div class="card">
+            <h2>집중 분야 분석</h2>
+            <p>내가 가장 몰입한 카테고리 TOP 3</p>
+            <a href="/plot/focus">보기</a>
+        </div>
+    </div>
+
+    <footer>
+        <a href="/plot/dashboard">대시보드 새로고침</a> |
+        <a href="/" class="home-link">홈으로 돌아가기</a>
+    </footer>
+</body>
+</html>

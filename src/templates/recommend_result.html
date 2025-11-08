@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 추천 결과</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            margin: 0; padding: 40px 20px; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            width: 100%; max-width: 500px;
+            text-align: center;
+        }
+        h2 { color: #5a67d8; }
+        .quest { font-size: 1.4em; font-weight: bold; color: #333; margin: 15px 0; }
+        .gauge {
+            height: 30px; background: #e2e8f0; border-radius: 15px; overflow: hidden;
+            margin: 20px 0; position: relative;
+        }
+        .fill {
+            height: 100%; width: 0%; background: {{ color }};
+            border-radius: 15px; transition: width 1.2s ease;
+            display: flex; align-items: center; justify-content: flex-end;
+            padding-right: 12px; color: white; font-weight: bold;
+        }
+        .message { font-size: 1.3em; margin: 20px 0; color: #444; }
+        .ai-tip {
+            background: #f0f5ff; border-left: 5px solid #667eea;
+            padding: 18px; margin: 25px 0; border-radius: 10px;
+            text-align: left; font-size: 0.95em; line-height: 1.6;
+        }
+        .btn-group { margin-top: 30px; display: flex; gap: 15px; justify-content: center; }
+        .btn {
+            padding: 12px 24px; border-radius: 10px; text-decoration: none;
+            font-weight: bold; transition: 0.3s;
+        }
+        .retry { background: #667eea; color: white; }
+        .home { background: #e2e8f0; color: #333; }
+        .retry:hover { background: #5a67d8; }
+        .home:hover { background: #cbd5e0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>AI 예측 결과</h2>
+        <div class="quest">{{ quest_name }}</div>
+        
+        <p>성공 확률</p>
+        <div class="gauge">
+            <div class="fill" style="width: {{ percent }}%">
+                {{ percent }}%
+            </div>
+        </div>
+        
+        <div class="message">{{ message }}</div>
+
+        <div class="ai-tip">
+            <strong>AI 코치의 조언</strong><br>
+            {{ ai_tip }}
+        </div>
+
+        <div class="btn-group">
+            <a href="/recommend" class="btn retry">다시 예측하기</a>
+            <a href="/" class="btn home">홈으로</a>
+        </div>
+    </div>
+
+    <script>
+        // 애니메이션
+        setTimeout(() => {
+            document.querySelector('.fill').style.width = '{{ percent }}%';
+        }, 100);
+    </script>
+</body>
+</html>

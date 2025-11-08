@@ -46,8 +46,6 @@ MODEL_PATH = "model/model.pkl"
 # templates로 html 코드 분리
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
-print("🔍 Template path:", os.path.join(BASE_DIR, "templates"))
-
 # 앱  생성 직후 호출하여 서버 시작 전에 테이블 생성 (버그 방지)
 init_db() 
 
@@ -219,7 +217,7 @@ async def process_onboarding(
 
 # -----메인 페이지------
 @app.get("/", response_class=HTMLResponse)
-# 💡 FIX: db 의존성 주입 (FastAPI의 Depends 사용)
+#  db 의존성 주입 (FastAPI의 Depends 사용)
 def root(request: Request, db: Session = Depends(get_db)): 
     # 1. 로그인 확인
     user_id = request.cookies.get("user_id")
@@ -227,7 +225,7 @@ def root(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
     
     user_id_int = int(user_id)
-    # 💡 FIX: db 객체를 사용하여 crud 함수 호출
+    # db 객체를 사용하여 crud 함수 호출
     user = crud.get_user(db, user_id_int) 
 
     if not user:
@@ -256,264 +254,109 @@ def root(request: Request, db: Session = Depends(get_db)):
 
 # 데이터 허브 페이지
 @app.get("/plot/dashboard", response_class=HTMLResponse)
-def plot_dashboard(request: Request):
+async def plot_dashboard(request: Request):
     user_id = request.cookies.get("user_id")
     if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    return """
-    <html>
-    <head>
-        <title>📊 데이터 시각화</title>
-        <style>
-            body {
-                font-family: 'Segoe UI', sans-serif;
-                background-color: #f9fafc;
-                margin: 0;
-                padding: 0;
-                color: #222;
-                text-align: center;
-            }
-            header {
-                background: linear-gradient(120deg, #02071e, #030928);
-                color: white;
-                padding: 40px 0;
-                box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-            }
-            h1 { margin: 0; font-size: 2em; }
-            p.desc { color: #ddd; margin-top: 5px; }
-
-            .container {
-                display: flex;
-                justify-content: center;
-                flex-wrap: wrap;
-                gap: 25px;
-                margin: 50px auto;
-                max-width: 900px;
-            }
-            .card {
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                width: 250px;
-                padding: 25px;
-                transition: transform 0.2s ease;
-            }
-            .card:hover { transform: translateY(-5px); }
-            .card h2 { color: #02071e; margin-bottom: 10px; }
-            .card p { color: #555; font-size: 0.95em; margin-bottom: 15px; }
-            .card a {
-                display: inline-block;
-                text-decoration: none;
-                background-color: #030928;
-                color: white;
-                padding: 10px 16px;
-                border-radius: 6px;
-                transition: background-color 0.2s;
-            }
-            .card a:hover { background-color: #02071e; }
-
-            footer { margin-top: 40px; color: #888; font-size: 0.9em; }
-            a.home { color: #007bff; text-decoration: none; }
-            a.home:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <header>
-            <h1>데이터 시각화 및 분석</h1>
-            <p class="desc">나의 성취와 패턴을 다양한 시각화로 확인하세요</p>
-        </header>
-
-        <div class="container">
-            <div class="card">
-                <h2>개인 퀘스트 현황</h2>
-                <p>완료율과 미완료율을 비율로 시각화합니다.</p>
-                <a href="/plot/user">보기</a>
-            </div>
-
-            <div class="card">
-                <h2>카테고리별 분석</h2>
-                <p>AI 예측 성공률을 카테고리별로 비교합니다.</p>
-                <a href="/plot/quest">보기</a>
-            </div>
-
-            <div class="card">
-                <h2>성장 추세</h2>
-                <p>시간이 지남에 따라 완료된 퀘스트 수를 확인하세요.</p>
-                <a href="/plot/trend">보기</a>
-            </div>
-
-            <div class="card">
-                <h2>집중 분야 분석</h2>
-                <p>내가 가장 몰입하는 카테고리를 시각화합니다.</p>
-                <a href="/plot/focus">보기</a>
-            </div>
-        </div>
-
-        <footer>
-            <a href="/plot/dashboard">📊 대시보드로 돌아가기</a> |
-            <a class="home" href="/">🏠 홈으로 돌아가기</a>
-        </footer>
-    </body>
-    </html>
-    """
-
-# 헬퍼 함수: 데이터 없음 메시지 HTML 생성
-def _no_data_html(message: str = "데이터가 없습니다. 퀘스트를 먼저 추가하세요!") -> str:
-    """데이터가 없을 때 표시할 중앙 정렬된 HTML 응답을 생성합니다."""
-    return f"""
-    <html>
-        <body style="text-align:center; font-family:'Segoe UI'; padding-top: 50px;">
-            <h3 style="color: #555;">{message}</h3>
-            <br><a href="/plot/dashboard">대시보드로 돌아가기</a>
-            <br><a href="/">🏠 홈으로</a>
-        </body>
-    </html>
-    """
-
-# 공통 스타일 템플릿
-def _styled_plot_page(title: str, desc: str, emoji: str, img_base64: str) -> str:
-    return f"""
-    <html>
-    <head>
-        <title>{emoji} {title}</title>
-        <style>
-            body {{
-                font-family: 'Segoe UI', sans-serif;
-                background-color: #f4f6f9;
-                color: #222;
-                margin: 0;
-                padding: 0;
-                text-align: center;
-            }}
-            header {{
-                background: linear-gradient(120deg, #02071e, #030928);
-                color: white;
-                padding: 30px 0;
-                margin-bottom: 30px;
-                box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-            }}
-            h1 {{ margin: 0; font-size: 1.8em; }}
-            p.desc {{ color: #ccc; margin-top: 8px; font-size: 1em; }}
-            .card {{
-                background: white;
-                width: 80%;
-                max-width: 700px;
-                margin: 0 auto;
-                border-radius: 12px;
-                box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-                padding: 20px;
-                text-align: center;
-            }}
-            img {{
-                width: 90%;
-                max-width: 650px;
-                border-radius: 8px;
-                margin-top: 15px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            }}
-            footer {{
-                margin-top: 30px;
-                color: #777;
-                font-size: 0.9em;
-            }}
-            a {{
-                color: #007bff;
-                text-decoration: none;
-            }}
-            a:hover {{ text-decoration: underline; }}
-        </style>
-    </head>
-    <body>
-        <header>
-            <h1>{emoji} {title}</h1>
-            <p class="desc">{desc}</p>
-        </header>
-
-        <div class="card">
-            <img src="data:image/png;base64,{img_base64}" alt="{title}" />
-        </div>
-
-        <footer>
-            <a href="/plot/dashboard">📊 대시보드로 돌아가기</a> |
-            <a href="/">🏠 홈으로</a>
-        </footer>
-    </body>
-    </html>
-    """
-
-# 개인 퀘스트 진행 현황 시각화
-@app.get("/plot/user", response_class=HTMLResponse)
-def plot_user(request: Request, db: Session = Depends(get_db)):
-    user_id = request.cookies.get("user_id")
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    img_base64 = plot_user_progress(db, int(user_id))
-    if not img_base64:
-        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
-
-    return _styled_plot_page(
-        title="내 퀘스트 진행 현황",
-        desc="완료율과 미완료율의 비율을 시각적으로 확인하세요.",
-        emoji="📊",
-        img_base64=img_base64
-    )
-
-# 카테고리별 성공률 시각화
-@app.get("/plot/quest", response_class=HTMLResponse)
-def plot_quest(request: Request, db: Session = Depends(get_db)):
-    user_id = request.cookies.get("user_id")
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    img_base64 = plot_success_rate_by_category(db, int(user_id))
-    if not img_base64:
-        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
-
-    return _styled_plot_page(
-        title="카테고리별 평균 성공률",
-        desc="AI가 예측한 카테고리별 성공률을 비교해보세요.",
-        emoji="🎯",
-        img_base64=img_base64
-    )
+        return RedirectResponse("/login")
+    return templates.TemplateResponse("plot_dashboard.html", {"request": request})
 
 
-# 성장 추세 시각화 
-@app.get("/plot/trend", response_class=HTMLResponse)
-def plot_trend(request: Request, db: Session = Depends(get_db)):
-    user_id = request.cookies.get("user_id")
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
+# 공통 헬퍼
+def render_no_data(request: Request, message: str = "데이터가 없습니다. 퀘스트를 먼저 추가하세요!"):
+    """데이터 없을 때 표시할 페이지"""
+    return templates.TemplateResponse("plot_page.html", {
+        "request": request,
+        "title": "데이터 없음",
+        "desc": "아직 분석할 데이터가 부족해요",
+        "emoji": "면",
+        "message": message
+    })
 
-    img_base64 = plot_growth_trend(db, int(user_id))
-    if not img_base64:
-        return HTMLResponse(_no_data_html("충분한 완료 기록 데이터가 없습니다. 퀘스트를 더 완료하세요!"))
+def render_plot_page(request: Request, title: str, desc: str, emoji: str, img_base64: str):
+    """모든 시각화 페이지 공통 템플릿"""
+    return templates.TemplateResponse("plot_page.html", {
+        "request": request,
+        "title": title,
+        "desc": desc,
+        "emoji": emoji,
+        "img_base64": img_base64
+    })
 
-    return _styled_plot_page(
-        title="시간 경과에 따른 성장 추세",
-        desc="시간에 따라 누적 완료 퀘스트 수의 변화를 확인하세요.",
-        emoji="📈",
-        img_base64=img_base64
-    )
+def get_user_id(request: Request) -> int | None:
+    """쿠키에서 user_id 가져오기 + 검증"""
+    user_id_str = request.cookies.get("user_id")
+    if not user_id_str:
+        return None
+    try:
+        return int(user_id_str)
+    except ValueError:
+        return None
 
-# 집중 분야 분석 시각화
-@app.get("/plot/focus", response_class=HTMLResponse)
-def plot_focus(request: Request, db: Session = Depends(get_db)):
-    user_id = request.cookies.get("user_id")
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
+# 각 시각화 페이지
+PLOT_ROUTES = [
+    {
+        "path": "/plot/user",
+        "title": "내 퀘스트 진행 현황",
+        "desc": "완료 vs 미완료 비율을 한눈에!",
+        "emoji": "파이",
+        "func": "plot_user_progress",
+        "no_data_msg": "퀘스트를 추가하면 바로 분석됩니다!"
+    },
+    {
+        "path": "/plot/quest",
+        "title": "카테고리별 성공률",
+        "desc": "AI 예측이 얼마나 정확한지 확인하세요",
+        "emoji": "대상",
+        "func": "plot_success_rate_by_category",
+        "no_data_msg": "카테고리별 데이터가 쌓이면 분석 가능!"
+    },
+    {
+        "path": "/plot/trend",
+        "title": "성장 추세 그래프",
+        "desc": "내가 얼마나 꾸준히 성장했는지 확인",
+        "emoji": "그래프",
+        "func": "plot_growth_trend",
+        "no_data_msg": "완료된 퀘스트가 3개 이상 필요해요!"
+    },
+    {
+        "path": "/plot/focus",
+        "title": "집중 분야 분석",
+        "desc": "내가 가장 열정적인 분야는?",
+        "emoji": "전구",
+        "func": "plot_focus_area",
+        "no_data_msg": "다양한 카테고리 퀘스트를 시도해보세요!"
+    }
+]
 
-    img_base64 = plot_focus_area(db, int(user_id))
-    if not img_base64:
-        return HTMLResponse(_no_data_html("데이터가 없습니다. 퀘스트를 먼저 추가하세요!"))
+# 자동으로 라우트 생성 (코드 80% 감소!)
+for route in PLOT_ROUTES:
+    @app.get(route["path"], response_class=HTMLResponse)
+    async def create_plot_route(
+        request: Request,
+        db: Session = Depends(get_db),
+        r=route  # 클로저 캡처 방지
+    ):
+        user_id = get_user_id(request)
+        if not user_id:
+            return RedirectResponse("/login")
 
-    return _styled_plot_page(
-        title="집중 분야 분석",
-        desc="내가 가장 몰입하는 카테고리를 시각화합니다.",
-        emoji="💡",
-        img_base64=img_base64
-    )
+        # 동적 함수 호출
+        plot_func = globals().get(r["func"])
+        if not plot_func:
+            return render_no_data("시각화 기능을 찾을 수 없습니다.")
+
+        img_base64 = plot_func(db, user_id)
+        
+        if not img_base64:
+            return render_no_data(r["no_data_msg"])
+
+        return render_plot_page(
+            request=request,
+            title=r["title"],
+            desc=r["desc"],
+            emoji=r["emoji"],
+            img_base64=img_base64
+        )
 
 ## DB 관련 라우트 (CRUD), 퀘스트 관리 페이지
 
@@ -660,22 +503,22 @@ def quests_list(request: Request, db: Session = Depends(get_db)):
         """
 
     active_html = "".join(render_quest_card(q) for q in active_quests) or "<p class='no-quest'>현재 진행 중인 퀘스트가 없습니다.</p>"
+    completed_html = "".join(render_quest_card(q) for q in completed_quests) or "<p class='no-quest'>완료된 퀘스트가 없습니다.</p>"
 
-    with open("templates/quests_list.html", "r", encoding="utf-8") as f:
-        html_template = f.read()
-
-    html = html_template.format(
-        user=user,
-        total=total,
-        completed=completed,
-        completion_rate=completion_rate,
-        streak=streak,
-        ai_message=ai_message,
-        active_html=active_html,
-        user_id_int=user_id_int,
+    return templates.TemplateResponse(
+        "quests_list.html",
+        {
+            "request": request,
+            "user": user,
+            "total": total,
+            "completed": completed,
+            "completion_rate": completion_rate,
+            "streak": streak,
+            "ai_message": ai_message,
+            "active_html": active_html,
+            "completed_html": completed_html, 
+        },
     )
-
-    return HTMLResponse(content=html)
 
 # 퀘스트 완료 토글 (PATCH)
 @app.patch("/quests/{quest_id}/toggle")
@@ -826,129 +669,56 @@ async def update_progress(
 
 #-----recommend 페이지-----
 # AI 퀘스트 추천 페이지
-@app.get("/recommend", response_class=HTMLResponse)
-def recommend_page():
-    return """
-    <html>
-        <head>
-            <title>AI 퀘스트 추천</title>
-            <style>
-                body { font-family: 'Segoe UI', sans-serif; text-align:center; margin-top:40px; background-color:#f8f9fa; color:#222; }
-                form { margin: 20px auto; padding: 20px; width: 400px; background: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                input, select { width: 90%; padding: 10px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; }
-                button { padding: 10px 15px; background-color: #0078d4; color: white; border: none; border-radius: 8px; cursor: pointer; }
-                button:hover { background-color: #005fa3; }
-                .gauge-container { width: 400px; margin: 30px auto; text-align:center; }
-                .gauge-bar { height: 25px; border-radius: 10px; background-color: #e9ecef; overflow:hidden; }
-                .gauge-fill { height: 100%; background-color: #28a745; text-align:right; color:white; font-weight:bold; padding-right:8px; border-radius: 10px; }
-            </style>
-        </head>
-        <body>
-            <h1>💡 AI 퀘스트 추천</h1>
-            <p>아래 정보를 입력하면 AI가 성공 확률과 추천 난이도를 예측합니다.</p>
 
-            <form action="/recommend/result" method="post">
-                <input type="text" name="quest_name" placeholder="퀘스트 이름" required><br>
-                <input type="number" name="duration" placeholder="예상 기간 (일)" required><br>
-                <select name="difficulty">
-                    <option value="1">난이도 1 (매우 쉬움)</option>
-                    <option value="2">난이도 2</option>
-                    <option value="3" selected>난이도 3</option>
-                    <option value="4">난이도 4</option>
-                    <option value="5">난이도 5 (매우 어려움)</option>
-                </select><br>
-                <button type="submit">AI 예측 실행 🚀</button>
-            </form>
-        </body>
-    </html>
-    """
+@app.get("/recommend", response_class=HTMLResponse)
+async def recommend_page(request: Request):
+    return templates.TemplateResponse("recommend.html", {"request": request})
 
 @app.post("/recommend/result", response_class=HTMLResponse)
 async def recommend_result(
     request: Request,
-    quest_name: Annotated[str, Form()],
-    duration: Annotated[int, Form()],
-    difficulty: Annotated[int, Form()]
+    quest_name: str = Form(...),
+    duration: int = Form(...),
+    difficulty: int = Form(...)
 ):
     user_id_str = request.cookies.get("user_id")
     if not user_id_str:
-        return RedirectResponse(url="/login", status_code=303)
-
+        return RedirectResponse("/login")
     try:
         user_id = int(user_id_str)
-    except ValueError:
-        return RedirectResponse(url="/login", status_code=303)
+    except:
+        return RedirectResponse("/login")
 
-    # 1. 성공 확률 예측
+    # AI 예측
     success_rate = model.predict_success_rate(user_id, quest_name, duration, difficulty)
     percent = round(success_rate * 100, 1)
 
-    # 2. 사용자 프로필 데이터 로드 (새로운 함수 호출)
-    user_profile = crud.get_user_profile_for_ai(user_id) 
-    
-    # 3. Gemini AI 조언 생성 (변경된 인자 전체 전달)
+    user_profile = crud.get_user_profile_for_ai(user_id)
     ai_tip = generate_ai_recommendation(
         quest_name=quest_name,
         duration=duration,
         difficulty=difficulty,
-        # 사용자 프로필 데이터 전달
-        consistency_score=user_profile["consistency_score"],
-        risk_aversion_score=user_profile["risk_aversion_score"],
-        total_quests=user_profile["total_quests"],
-        completed_quests=user_profile["completed_quests"],
-        preferred_category=user_profile["preferred_category"]
+        **user_profile
     )
-    
-    # 4. 성공률 메시지 및 색상 설정 (기존 로직 유지)
+
+    # 색상 및 메시지
     if percent >= 70:
         color = "#28a745"
+        message = "도전해볼 만한 목표예요!"
     elif percent >= 50:
         color = "#ffc107"
+        message = "충분히 가능성이 있습니다!"
     else:
         color = "#dc3545"
+        message = "조금 어렵지만 해볼 수 있어요!"
 
-    if percent >= 80:
-        message = "🔥 도전해볼 만한 목표예요!"
-    elif percent >= 60:
-        message = "💪 충분히 가능성이 있습니다!"
-    elif percent >= 40:
-        message = "⚖️ 조금 어렵지만 해볼 수 있어요."
-    else:
-        message = "💀 난이도가 높습니다. 단계를 낮춰보세요."
-
-    # 5. 결과 페이지 렌더링 (HTML 부분은 변경 없음)
-    return f"""
-    <html>
-        <head>
-            <title>AI 추천 결과</title>
-            <style>
-                body {{ font-family:'Segoe UI', sans-serif; text-align:center; background-color:#f8f9fa; margin-top:60px; }}
-                .result-box {{ background:white; width:420px; margin:0 auto; border-radius:12px; padding:25px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }}
-                .gauge-bar {{ height:25px; border-radius:10px; background-color:#e9ecef; overflow:hidden; margin-top:15px; }}
-                .gauge-fill {{ height:100%; background-color:{color}; width:{percent}%; text-align:right; color:white; font-weight:bold; padding-right:8px; border-radius:10px; transition:width 0.6s ease-in-out; }}
-                .ai-tip {{ background:#f1f3f5; border-left:4px solid #0078d4; padding:12px; margin-top:20px; border-radius:8px; text-align:left; color:#333; }}
-                a {{ text-decoration:none; color:#0078d4; font-weight:bold; }}
-            </style>
-        </head>
-        <body>
-            <div class="result-box">
-                <h2>🧠 AI 예측 결과</h2>
-                <p><b>{quest_name}</b> 퀘스트의 성공 확률은</p>
-                <div class="gauge-bar">
-                    <div class="gauge-fill">{percent}%</div>
-                </div>
-                <h3>{message}</h3>
-
-                <div class="ai-tip">
-                    <b>💬 AI 코치의 조언</b><br>
-                    {ai_tip}
-                </div>
-
-                <br>
-                <a href="/recommend">🔁 다시 예측하기</a> | <a href="/">🏠 홈으로</a>
-            </div>
-        </body>
-    </html>
-    """
+    return templates.TemplateResponse("recommend_result.html", {
+        "request": request,
+        "quest_name": quest_name,
+        "percent": percent,
+        "color": color,
+        "message": message,
+        "ai_tip": ai_tip
+    })
 
 # uvicorn src.main:app --reload
