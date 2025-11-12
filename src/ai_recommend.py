@@ -65,7 +65,7 @@ def generate_ai_recommendation(
     - 전체 퀘스트 수행 수: {total_quests}
     - 완료한 퀘스트 수: {completed_quests}
     - 꾸준함 점수(consistency): {consistency_score}/5
-    - 위험 회피 성향(risk_aversion): {risk_aversion_score}/5
+    - 도전적인 성향(risk_aversion): {risk_aversion_score}/5
     - 선호 카테고리: {preferred_category or "없음"}
 
     [현재 퀘스트]

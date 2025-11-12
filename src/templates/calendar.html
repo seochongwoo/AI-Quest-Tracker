@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>습관 캘린더</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background:#f8f9fc; margin:0; padding:20px; }
+        .container { max-width: 800px; margin: 0 auto; background:white; border-radius:20px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align:center; color:#1a202c; margin-bottom:10px; }
+        .streak { text-align:center; background:linear-gradient(135deg,#ff6b6b,#feca57); color:white; padding:16px; border-radius:16px; font-size:1.4em; font-weight:bold; margin-bottom:30px; }
+        .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:12px; }
+        .day-name { text-align:center; font-weight:bold; color:#4a5568; padding:12px; background:#e2e8f0; border-radius:12px; }
+        .day { aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.1em; border-radius:16px; transition:0.3s; }
+        .empty { background:transparent; }
+        .completed { background:#10b981; color:white; box-shadow:0 8px 20px rgba(16,185,129,0.4); }
+        .incomplete { background:#e5e7eb; color:#9ca3af; }
+        .today { border:4px solid #667eea !important; }
+        .back-btn { display:inline-block; margin-top:30px; padding:12px 24px; background:#667eea; color:white; text-decoration:none; border-radius:50px; font-weight:bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>습관 캘린더</h1>
+        <div class="streak">
+            현재 {{ streak }}일 연속 완료 중!
+        </div>
+        <div style="text-align:center; margin-bottom:20px; font-size:1.3em; color:#4a5568;">
+            {{ month_name }}
+        </div>
+
+        <div class="calendar">
+            {% for name in ["월","화","수","목","금","토","일"] %}
+                <div class="day-name">{{ name }}</div>
+            {% endfor %}
+
+            {% for d in days %}
+                {% if d is none %}
+                    <div class="day empty"></div>
+                {% else %}
+                    {% set today_str = "__today__" %} <!-- Jinja에서 오늘 날짜 비교 -->
+                    <div class="day 
+                         {% if d.completed %}completed{% else %}incomplete{% endif %}
+                         {% if d.date == today_str %}today{% endif %}">
+                        {{ d.day }}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div style="text-align:center; margin-top:40px;">
+            <a href="/" class="back-btn">홈으로 돌아가기</a>
+        </div>
+    </div>
+</body>
+</html>

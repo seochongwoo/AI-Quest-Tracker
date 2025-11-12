@@ -4,9 +4,9 @@ get_db() 함수를 통해 DB 세션을 각 요청에 주입하고, /users/ 라�
 '''
 # fast api 백엔드를 위한 import
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query, Body
-from typing import Annotated
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from src import crud, schemas, database
 from . import crud, schemas, model
 from pydantic import BaseModel
@@ -15,10 +15,11 @@ import os
 # Db를 위한 import
 from .database import SessionLocal, init_db, QuestHistory, Quest
 from . import crud, schemas
-#  A시간 관리를 위한 임포트 추가
-from datetime import datetime, timezone
 # 시각화를 위한 import
-from .habit_analysis import plot_user_progress,plot_success_rate_by_category, plot_focus_area, plot_growth_trend
+from .habit_analysis import plot_user_progress, plot_success_rate_by_category, plot_growth_trend, plot_focus_area
+#  시간 관리를 위한 임포트 추가
+from datetime import datetime, timezone, timedelta, date
+from collections import defaultdict
 # ai_recoomend를 위한 import
 from .ai_recommend import generate_ai_recommendation
 from dotenv import load_dotenv
@@ -328,7 +329,7 @@ PLOT_ROUTES = [
     }
 ]
 
-# 자동으로 라우트 생성 (코드 80% 감소!)
+# 자동으로 라우트 생성 
 for route in PLOT_ROUTES:
     @app.get(route["path"], response_class=HTMLResponse)
     async def create_plot_route(
@@ -666,7 +667,6 @@ async def update_progress(
 
     return {"id": quest.id, "progress": quest.progress}
 
-
 #-----recommend 페이지-----
 # AI 퀘스트 추천 페이지
 
@@ -721,4 +721,71 @@ async def recommend_result(
         "ai_tip": ai_tip
     })
 
+##-----calender 페이지-----
+@app.get("/calendar", response_class=HTMLResponse)
+async def habit_calendar(request: Request, db: Session = Depends(get_db)):
+    user_id = get_user_id(request) or 1  
+
+    completed_dates = db.query(
+        func.date(QuestHistory.timestamp)
+    ).filter(
+        QuestHistory.user_id == user_id,
+        QuestHistory.action == "completed"
+    ).all()
+
+    # 문자열이든 date 객체든 무조건 처리
+    completed_set = set()
+    for d in completed_dates:
+        date_obj = d[0]
+        if isinstance(date_obj, str):
+            completed_set.add(date_obj)
+        else:
+            completed_set.add(date_obj.strftime("%Y-%m-%d"))
+
+    # 스트릭 계산
+    today = date.today()
+    streak = 0
+    check_date = today
+    while True:
+        date_str = check_date.strftime("%Y-%m-%d")
+        if date_str in completed_set:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+        if streak > 100:
+            break
+
+    # 이번 달 캘린더
+    now = datetime.now()
+    year, month = now.year, now.month
+    first_day = datetime(year, month, 1)
+    if month == 12:
+        next_month = datetime(year + 1, 1, 1)
+    else:
+        next_month = datetime(year, month + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    start_weekday = first_day.weekday()
+
+    days = []
+    for _ in range(start_weekday):
+        days.append(None)
+
+    for day in range(1, last_day + 1):
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        days.append({
+            "day": day,
+            "date": date_str,
+            "completed": date_str in completed_set
+        })
+
+    today_str = today.strftime("%Y-%m-%d")
+
+    return templates.TemplateResponse("calendar.html", {
+        "request": request,
+        "days": days,
+        "streak": streak,
+        "month_name": now.strftime("%Y년 %m월"),
+        "today_str": today_str
+    })
 # uvicorn src.main:app --reload
