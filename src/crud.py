@@ -7,6 +7,10 @@ from .database import User, Quest, QuestHistory, SessionLocal
 from .schemas import UserCreate, QuestCreate, UserUpdateScores
 from . import model
 from datetime import datetime, timezone, timedelta
+from sklearn.metrics.pairwise import cosine_similarity
+from .model import EMBEDDER, load_ml_model
+from typing import Optional, List
+import logging
 
 # ----------------------------
 # User CRUD 함수
@@ -216,3 +220,61 @@ def get_user_profile_for_ai(user_id: int):
         "completed_quests": user.completed_quests if hasattr(user, 'completed_quests') else 5,
         "preferred_category": user.preferred_category if hasattr(user, 'preferred_category') else None
     }
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # 필요 시 INFO로 변경
+
+def get_similar_quests(
+    db: Session, 
+    user_id: int, 
+    new_quest_name: str, 
+    new_category: Optional[str] = None, 
+    top_n: int = 3,
+    similarity_threshold: float = 0.7  # 유사도 임계값
+) -> List[tuple]:
+    # EMBEDDER 확인 및 로드 시도
+    if EMBEDDER is None:
+        load_ml_model()
+        if EMBEDDER is None:
+            logger.warning("EMBEDDER 로드 실패. 빈 리스트 반환.")
+            return []
+
+    # 사용자 과거 퀘스트 쿼리
+    past_quests = db.query(Quest).filter(Quest.user_id == user_id).all()
+    if not past_quests:
+        logger.info(f"User {user_id} has no past quests.")
+        return []
+
+    try:
+        # 새 퀘스트 텍스트 생성
+        new_text = new_quest_name
+        if new_category:
+            new_text += f" {new_category}"
+        new_emb = EMBEDDER.encode([new_text])[0].reshape(1, -1)  # 배치 encode로 최적화
+
+        # 과거 퀘스트 텍스트 리스트 생성 (배치 encode 위해)
+        past_texts = []
+        for quest in past_quests:
+            past_text = quest.name
+            if quest.category:
+                past_text += f" {quest.category}"
+            past_texts.append(past_text)
+
+        # 배치로 과거 임베딩 생성 (성능 향상)
+        past_embs = EMBEDDER.encode(past_texts)
+
+        # 유사도 계산
+        similarities = []
+        for i, (quest, past_emb) in enumerate(zip(past_quests, past_embs)):
+            sim = cosine_similarity(new_emb, past_emb.reshape(1, -1))[0][0]
+            logger.debug(f"Quest {quest.id} ('{past_texts[i]}') similarity: {sim:.4f}")
+            if sim >= similarity_threshold:
+                similarities.append((quest, sim))
+
+        # 유사도 내림차순 정렬 후 top_n 반환
+        top_similar = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_n]
+        return [(q.id, q.name, q.category, q.success_rate, sim) for q, sim in top_similar]
+
+    except Exception as e:
+        logger.error(f"Error in similarity calculation: {e}")
+        return []

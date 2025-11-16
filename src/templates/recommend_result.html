@@ -2,50 +2,121 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>AI 추천 결과</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 추천 결과</title>
     <style>
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-            margin: 0; padding: 40px 20px; min-height: 100vh;
-            display: flex; align-items: center; justify-content: center;
+            margin: 0;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
         }
         .container {
             background: white;
             padding: 40px;
             border-radius: 16px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.2);
-            width: 100%; max-width: 500px;
+            width: 100%;
+            max-width: 500px;
             text-align: center;
         }
-        h2 { color: #5a67d8; }
-        .quest { font-size: 1.4em; font-weight: bold; color: #333; margin: 15px 0; }
+        h2 {
+            color: #5a67d8;
+            margin-bottom: 20px;
+        }
+        .quest {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #333;
+            margin: 15px 0;
+        }
         .gauge {
-            height: 30px; background: #e2e8f0; border-radius: 15px; overflow: hidden;
-            margin: 20px 0; position: relative;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+            position: relative;
         }
         .fill {
-            height: 100%; width: 0%; background: {{ color }};
-            border-radius: 15px; transition: width 1.2s ease;
-            display: flex; align-items: center; justify-content: flex-end;
-            padding-right: 12px; color: white; font-weight: bold;
+            height: 100%;
+            width: 0;
+            background: {{ color }};
+            border-radius: 15px;
+            transition: width 1.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 12px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
         }
-        .message { font-size: 1.3em; margin: 20px 0; color: #444; }
+        .message {
+            font-size: 1.3em;
+            margin: 20px 0;
+            color: #444;
+        }
         .ai-tip {
-            background: #f0f5ff; border-left: 5px solid #667eea;
-            padding: 18px; margin: 25px 0; border-radius: 10px;
-            text-align: left; font-size: 0.95em; line-height: 1.6;
+            background: #f0f5ff;
+            border-left: 5px solid #667eea;
+            padding: 18px;
+            margin: 25px 0;
+            border-radius: 10px;
+            text-align: left;
+            font-size: 0.95em;
+            line-height: 1.6;
         }
-        .btn-group { margin-top: 30px; display: flex; gap: 15px; justify-content: center; }
+        .similar-section {
+            margin: 25px 0;
+            text-align: left;
+        }
+        .similar-section ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        .similar-section li {
+            background: #f8f9fc;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn-group {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
         .btn {
-            padding: 12px 24px; border-radius: 10px; text-decoration: none;
-            font-weight: bold; transition: 0.3s;
+            padding: 12px 24px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background 0.3s, transform 0.2s;
         }
-        .retry { background: #667eea; color: white; }
-        .home { background: #e2e8f0; color: #333; }
-        .retry:hover { background: #5a67d8; }
-        .home:hover { background: #cbd5e0; }
+        .retry {
+            background: #667eea;
+            color: white;
+        }
+        .home {
+            background: #e2e8f0;
+            color: #333;
+        }
+        .retry:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        .home:hover {
+            background: #cbd5e0;
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -55,7 +126,7 @@
         
         <p>성공 확률</p>
         <div class="gauge">
-            <div class="fill" style="width: {{ percent }}%">
+            <div class="fill" id="fillBar">
                 {{ percent }}%
             </div>
         </div>
@@ -67,6 +138,21 @@
             {{ ai_tip }}
         </div>
 
+        <div class="similar-section">
+            <h3>비슷한 과거 퀘스트 추천</h3>
+            <ul>
+                {% if similar_quests %}
+                    {% for quest in similar_quests %}
+                        <li>
+                            {{ quest[1] }} (카테고리: {{ quest[2] or '없음' }}) - 성공률: {{ quest[3] * 100 | round(1) }}% (유사도: {{ quest[4] | round(2) }})
+                        </li>
+                    {% endfor %}
+                {% else %}
+                    <p>비슷한 과거 퀘스트가 없습니다.</p>
+                {% endif %}
+            </ul>
+        </div>
+
         <div class="btn-group">
             <a href="/recommend" class="btn retry">다시 예측하기</a>
             <a href="/" class="btn home">홈으로</a>
@@ -74,10 +160,11 @@
     </div>
 
     <script>
-        // 애니메이션
-        setTimeout(() => {
-            document.querySelector('.fill').style.width = '{{ percent }}%';
-        }, 100);
+        // 애니메이션: 페이지 로드 후 바로 시작
+        document.addEventListener('DOMContentLoaded', () => {
+            const fill = document.getElementById('fillBar');
+            fill.style.width = '{{ percent }}%';
+        });
     </script>
 </body>
 </html>

@@ -21,6 +21,7 @@ from .habit_analysis import plot_user_progress, plot_success_rate_by_category, p
 from datetime import datetime, timezone, timedelta, date
 from collections import defaultdict
 # ai_recoomend를 위한 import
+from typing import Optional
 from .ai_recommend import generate_ai_recommendation
 from dotenv import load_dotenv
 load_dotenv()
@@ -679,7 +680,9 @@ async def recommend_result(
     request: Request,
     quest_name: str = Form(...),
     duration: int = Form(...),
-    difficulty: int = Form(...)
+    difficulty: int = Form(...),
+    db: Session = Depends(get_db),
+    category: Optional[str] = Form(None)
 ):
     user_id_str = request.cookies.get("user_id")
     if not user_id_str:
@@ -701,6 +704,9 @@ async def recommend_result(
         **user_profile
     )
 
+    # 비슷한 퀘스트 추천
+    similar_quests = crud.get_similar_quests(db=db, user_id=user_id, new_quest_name=quest_name, new_category=category)
+
     # 색상 및 메시지
     if percent >= 70:
         color = "#28a745"
@@ -718,7 +724,8 @@ async def recommend_result(
         "percent": percent,
         "color": color,
         "message": message,
-        "ai_tip": ai_tip
+        "ai_tip": ai_tip,
+        "similar_quests": similar_quests
     })
 
 ##-----calender 페이지-----
@@ -788,4 +795,5 @@ async def habit_calendar(request: Request, db: Session = Depends(get_db)):
         "month_name": now.strftime("%Y년 %m월"),
         "today_str": today_str
     })
+
 # uvicorn src.main:app --reload
