@@ -11,6 +11,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from .model import EMBEDDER, load_ml_model
 from typing import Optional, List
 import logging
+from sentence_transformers import SentenceTransformer
+import torch
 
 # ----------------------------
 # User CRUD 함수
@@ -221,23 +223,31 @@ def get_user_profile_for_ai(user_id: int):
         "preferred_category": user.preferred_category if hasattr(user, 'preferred_category') else None
     }
 
+# 로그 설정
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # 필요 시 INFO로 변경
+logger.setLevel(logging.DEBUG)
 
 def get_similar_quests(
-    db: Session, 
-    user_id: int, 
-    new_quest_name: str, 
-    new_category: Optional[str] = None, 
+    db: Session,
+    user_id: int,
+    new_quest_name: str,
+    new_category: Optional[str] = None,
     top_n: int = 3,
-    similarity_threshold: float = 0.7  # 유사도 임계값
+    similarity_threshold: float = 0.7  # 유사도 임계값 (조정 가능)
 ) -> List[tuple]:
-    # EMBEDDER 확인 및 로드 시도
+    # EMBEDDER 확인 및 로드/초기화
+    global EMBEDDER
     if EMBEDDER is None:
         load_ml_model()
         if EMBEDDER is None:
-            logger.warning("EMBEDDER 로드 실패. 빈 리스트 반환.")
-            return []
+            logger.warning("EMBEDDER 로드 실패. 기본 모델 수동 초기화.")
+            try:
+                EMBEDDER = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+                EMBEDDER.to(torch.device('cpu'))
+                logger.info("기본 EMBEDDER 초기화 성공.")
+            except Exception as e:
+                logger.error(f"EMBEDDER 초기화 실패: {e}")
+                return []
 
     # 사용자 과거 퀘스트 쿼리
     past_quests = db.query(Quest).filter(Quest.user_id == user_id).all()
@@ -247,23 +257,19 @@ def get_similar_quests(
 
     try:
         # 새 퀘스트 텍스트 생성
-        new_text = new_quest_name
-        if new_category:
-            new_text += f" {new_category}"
-        new_emb = EMBEDDER.encode([new_text])[0].reshape(1, -1)  # 배치 encode로 최적화
+        new_text = new_quest_name + (f" {new_category}" if new_category else "")
+        new_emb = EMBEDDER.encode([new_text])[0].reshape(1, -1)
 
-        # 과거 퀘스트 텍스트 리스트 생성 (배치 encode 위해)
-        past_texts = []
-        for quest in past_quests:
-            past_text = quest.name
-            if quest.category:
-                past_text += f" {quest.category}"
-            past_texts.append(past_text)
+        # 과거 퀘스트 텍스트 리스트 생성 (배치 처리)
+        past_texts = [
+            quest.name + (f" {quest.category}" if quest.category else "")
+            for quest in past_quests
+        ]
 
-        # 배치로 과거 임베딩 생성 (성능 향상)
+        # 배치 임베딩 생성
         past_embs = EMBEDDER.encode(past_texts)
 
-        # 유사도 계산
+        # 유사도 계산 및 필터링
         similarities = []
         for i, (quest, past_emb) in enumerate(zip(past_quests, past_embs)):
             sim = cosine_similarity(new_emb, past_emb.reshape(1, -1))[0][0]
@@ -276,5 +282,5 @@ def get_similar_quests(
         return [(q.id, q.name, q.category, q.success_rate, sim) for q, sim in top_similar]
 
     except Exception as e:
-        logger.error(f"Error in similarity calculation: {e}")
+        logger.error(f"Similarity calculation error: {e}")
         return []

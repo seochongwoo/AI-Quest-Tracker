@@ -86,9 +86,10 @@ dump((model, embedder), MODEL_PATH)
 - FastAPI 서버 구동 시 model.py를 통해 model/model.pkl에서 학습된 모델을 로드합니다.
 
 ### 주요 엔드포인트
-- /quests/list: 사용자별 퀘스트 목록 및 상태 토글/삭제 기능 제공
+- /quests/{quest_id}: 퀘스트 상세 조회 및 업데이트 (예: 상태 토글/삭제)
 - /plot/dashboard: 사용자별 퀘스트 시각화 제공
 - /recommend/result: 사용자의 로그인 ID를 기반으로 Gemini를 통한 맞춤형 성공률 예측 및 조언
+- /calendar: 사용자의 성취를 달력 형태로 제공
 
 ### 예측 결과
 ```python
@@ -107,9 +108,10 @@ predicted_rate = predict_success_rate(
 ##  Demo
 
 예시:
-- 데이터 학습 화면
-- FastAPI Swagger 실행 화면
-- 예측 결과 API 호출 화면  
+- /quests 예시
+- /plot/dashboard 예시
+- /recommend 예시
+- /calendar 예시 
 
 ---
 
@@ -120,7 +122,7 @@ predicted_rate = predict_success_rate(
 ##  기술 스택
 - **Backend**: Python, FastAPI  
 - **ML**: scikit-learn (RandomForest, CalibratedClassifierCV), joblib, SentenceTransformer 
-- **DB**: SQLAlchemy
+- **DB**: SQLAlchemy (with SQLite backend)
 - **Visualization**: matplotlib, Plotly, HTML/CSS Gauge Bar
 
 ---

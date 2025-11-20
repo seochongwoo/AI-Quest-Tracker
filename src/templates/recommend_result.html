@@ -127,7 +127,7 @@
         <p>성공 확률</p>
         <div class="gauge">
             <div class="fill" id="fillBar">
-                {{ percent }}%
+                {{ percent | round(1) }}%
             </div>
         </div>
         
@@ -144,7 +144,7 @@
                 {% if similar_quests %}
                     {% for quest in similar_quests %}
                         <li>
-                            {{ quest[1] }} (카테고리: {{ quest[2] or '없음' }}) - 성공률: {{ quest[3] * 100 | round(1) }}% (유사도: {{ quest[4] | round(2) }})
+                            {{ quest[1] }} (카테고리: {{ quest[2] or '없음' }}) - 성공률: {{ (quest[3] * 100) | round(1) }}% (유사도: {{ quest[4] | round(2) }})
                         </li>
                     {% endfor %}
                 {% else %}
@@ -163,7 +163,7 @@
         // 애니메이션: 페이지 로드 후 바로 시작
         document.addEventListener('DOMContentLoaded', () => {
             const fill = document.getElementById('fillBar');
-            fill.style.width = '{{ percent }}%';
+            fill.style.width = '{{ percent | round(1) }}%';
         });
     </script>
 </body>
