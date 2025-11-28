@@ -111,17 +111,16 @@ predicted_rate = predict_success_rate(
 ##  Demo
 
 - 로그인 화면
-<img width="1031" height="490" alt="image" src="https://github.com/user-attachments/assets/f8b923a5-6b08-4033-a961-2fca7ba22b80" />
-- 회원 가입 페이지
-<img width="1027" height="521" alt="image" src="https://github.com/user-attachments/assets/ce9033bf-4136-4fe1-a527-03e7fc43ed3f" />
-사용자의 성향에 따라 성공확률이 다르게 나타나고, Gemini API가 다른 방식으로 조언을 합니다.
+  메인페이지
+  <img width="1031" height="490" alt="image" src="https://github.com/user-attachments/assets/f8b923a5-6b08-4033-a961-2fca7ba22b80" />
+  회원 가입 페이지
+  <img width="1027" height="521" alt="image" src="https://github.com/user-attachments/assets/ce9033bf-4136-4fe1-a527-03e7fc43ed3f" />
+  사용자의 성향에 따라 성공확률이 다르게 나타나고, Gemini API가 다른 방식으로 조언을 합니다.
 
 
 - 메인 페이지
 <img width="1039" height="848" alt="image" src="https://github.com/user-attachments/assets/22f57859-7d5d-46ef-9667-8df56889c695" />
 
-
-예시:
 - /quests 예시
 
   메인  페이지
