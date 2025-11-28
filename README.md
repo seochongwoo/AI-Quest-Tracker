@@ -59,7 +59,7 @@ uvicorn src.main:app --reload
 
 ###  샘플 데이터
 `seed.py`로 더미데이터 
-- GPT를 통한 현실적인 더미데이터 생성
+- AI를 통한 현실적인 더미데이터 생성
 - 데이터베이스에 저장되는 레코드 예시
 
 ```csv
@@ -96,10 +96,12 @@ dump((model, embedder), MODEL_PATH)
 # model.py의 predict_success_rate 함수 호출
 predicted_rate = predict_success_rate(
     user_id=user_id,
-    quest_name="매일 30분 운동",  # 예측할 퀘스트 이름
-    duration=7,                  # 예상 기간 (일)
-    difficulty=4                 # 난이도 (1~5)
-)
+    quest_name="매일 30분 운동",      # 예측할 퀘스트 이름
+    duration=7,                      # 예상 기간 (일)
+    difficulty=4                     # 난이도 (1~5)
+    category: Optional[str] = None,  # 카테고리 설정
+    motivation: Optional[str] = None # 동기부여 문구
+)-> float
 # 반환 값은 0.0 ~ 1.0 사이의 성공 확률
 ```
 
@@ -107,11 +109,46 @@ predicted_rate = predict_success_rate(
 
 ##  Demo
 
+로그인 화면
+<img width="1031" height="490" alt="image" src="https://github.com/user-attachments/assets/f8b923a5-6b08-4033-a961-2fca7ba22b80" />
+
+메인 페이지
+<img width="1039" height="848" alt="image" src="https://github.com/user-attachments/assets/22f57859-7d5d-46ef-9667-8df56889c695" />
+
+
 예시:
 - /quests 예시
+  메인  페이지
+  <img width="1037" height="1074" alt="image" src="https://github.com/user-attachments/assets/ccf9a969-1d88-4aea-b589-28ef9edee08c" />
+  특정 퀘스트의 성공을 여러번 하면 성공률이 높아짐을 확인할 수 있습니다.
+  <img width="799" height="937" alt="image" src="https://github.com/user-attachments/assets/097afa2a-52c5-4da8-be3e-22050adc4c7d" />
+  목표 일수에 따라 퀘스트를 얼만큼 수행했는지 체크할 수 있습니다.
+  <img width="1016" height="1102" alt="image" src="https://github.com/user-attachments/assets/bc50755c-0aa8-4a6a-bbcc-25821f02c2f6" />
+  
 - /plot/dashboard 예시
+  메인 페이지
+  <img width="1038" height="809" alt="image" src="https://github.com/user-attachments/assets/efbc1bbb-2f9a-4c5a-86f5-369b039b23e9" />
+  개인 퀘스트 현황
+  <img width="1022" height="1101" alt="image" src="https://github.com/user-attachments/assets/295807b4-2548-483a-9e23-a51902c0150f" />
+  카테고리별 성공률
+  <img width="1020" height="700" alt="image" src="https://github.com/user-attachments/assets/5de64fb0-8902-4b06-9826-0d5796e5466a" />
+  성장 추세 그래프
+  <img width="1021" height="747" alt="image" src="https://github.com/user-attachments/assets/ca1d809e-1d39-41e5-a0d4-fe109db46d3d" />
+  집중 분야 분석
+  <img width="1019" height="1100" alt="image" src="https://github.com/user-attachments/assets/c7899c40-ed31-41e9-b688-a5d66dd002b4" />
+  test1 계정으로는 운동 카테고리를 많이 수행했기 때문에 exercise의 성공률이 다른 카테고리 보다 높은 것을 확인할 수 있습니다.
+  
 - /recommend 예시
-- /calendar 예시 
+  메인 페이지
+  <img width="1022" height="1116" alt="image" src="https://github.com/user-attachments/assets/904eb9c9-63fb-4f27-b574-72ce7c6d8d71" />
+  gemini API를 활용한 예측 화면
+  <img width="1019" height="1113" alt="image" src="https://github.com/user-attachments/assets/23339f51-9968-450b-9703-552b54f1ec96" />
+  
+
+- /calendar 예시
+  메인 페이지
+  <img width="1033" height="991" alt="image" src="https://github.com/user-attachments/assets/3dc2f898-8e35-42c9-99d5-7d35223f4a14" />
+
 
 ---
 
