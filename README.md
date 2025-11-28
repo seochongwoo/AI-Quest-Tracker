@@ -143,7 +143,8 @@ predicted_rate = predict_success_rate(
   <img width="1022" height="1116" alt="image" src="https://github.com/user-attachments/assets/904eb9c9-63fb-4f27-b574-72ce7c6d8d71" />
   gemini API를 활용한 예측 화면
   <img width="1019" height="1113" alt="image" src="https://github.com/user-attachments/assets/23339f51-9968-450b-9703-552b54f1ec96" />
-  
+  과거 비슷한 퀘스트를 수행한 이력이 있다면 코사인 유사도를 계산해 보여줍니다.
+  <img width="1018" height="1109" alt="image" src="https://github.com/user-attachments/assets/fad3cfae-c5a0-4158-97b7-07e6b0c90180" />
 
 - /calendar 예시
   메인 페이지
