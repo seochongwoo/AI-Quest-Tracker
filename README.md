@@ -59,7 +59,7 @@ uvicorn src.main:app --reload
 
 ###  샘플 데이터
 `seed.py`로 더미데이터 
-- AI를 통한 현실적인 더미데이터 생성
+- 현실적 분포 기반의 더미데이터 생성(랜덤 분포와 사용자 편향 반영)
 - 데이터베이스에 저장되는 레코드 예시
 
 ```csv
@@ -73,12 +73,13 @@ user_id, name, category, duration, difficulty, completed, ...
 `src/train.py`  
 - 랜덤 포레스트 기반 분류 모델 학습 및 보정(CalibratedClassifierCV) 적용
 - 퀘스트 이름(name)을 SentenceTransformer로 임베딩하여 모델 피처에 사용
--  사용자별 완료율(user_success_rate), 기간(days), 난이도(difficulty) 등을 피처로 활용하여 성공 여부(completed) 예측
+- 사용자별 완료율(user_success_rate), 기간(days), 난이도(difficulty) 등을 피처로 활용하여 성공 여부(completed) 예측
 - 학습된 모델과 임베딩 객체를 포함한 튜플을 model/model.pkl로 저장
 ```python
 # train.py에서 모델과 임베더 객체를 함께 저장합니다.
 dump((model, embedder), MODEL_PATH)
 ```
+- 온보딩 및 성향 점수: 사용자 성향(consistency_score, risk_aversion_score)을 입력받아 예측 모델과 AI 추천에 반영
 
 
 ###  API 실행
@@ -86,10 +87,10 @@ dump((model, embedder), MODEL_PATH)
 - FastAPI 서버 구동 시 model.py를 통해 model/model.pkl에서 학습된 모델을 로드합니다.
 
 ### 주요 엔드포인트
-- /quests/{quest_id}: 퀘스트 상세 조회 및 업데이트 (예: 상태 토글/삭제)
-- /plot/dashboard: 사용자별 퀘스트 시각화 제공
-- /recommend/result: 사용자의 로그인 ID를 기반으로 Gemini를 통한 맞춤형 성공률 예측 및 조언
-- /calendar: 사용자의 성취를 달력 형태로 제공
+- /quests/{quest_id}: 퀘스트 상세 조회 및 업데이트 (예: 상태 토글/삭제, 진행률 업데이트)
+- /plot/dashboard: 사용자별 퀘스트 시각화 제공 (진행 현황, 카테고리 성공률, 성장 추세, 집중 분야)
+- /recommend/result: 사용자의 로그인 ID를 기반으로 Gemini를 통한 맞춤형 성공률 예측 및 조언 (비슷한 과거 퀘스트 추천 포함)
+- /calendar: 사용자의 성취를 달력 형태로 제공 (스트릭 계산 포함)
 
 ### 예측 결과
 ```python
@@ -145,7 +146,8 @@ predicted_rate = predict_success_rate(
   test1 계정으로는 운동 카테고리를 많이 수행했기 때문에 exercise의 성공률이 다른 카테고리 보다 높은 것을 확인할 수 있습니다.
   
 - /recommend 예시
-  메인 페이지
+
+   메인 페이지
   <img width="1022" height="1116" alt="image" src="https://github.com/user-attachments/assets/904eb9c9-63fb-4f27-b574-72ce7c6d8d71" />
   gemini API를 활용한 예측 화면
   <img width="1019" height="1113" alt="image" src="https://github.com/user-attachments/assets/23339f51-9968-450b-9703-552b54f1ec96" />
