@@ -111,6 +111,10 @@ predicted_rate = predict_success_rate(
 
 로그인 화면
 <img width="1031" height="490" alt="image" src="https://github.com/user-attachments/assets/f8b923a5-6b08-4033-a961-2fca7ba22b80" />
+회원 가입 페이지
+<img width="1027" height="521" alt="image" src="https://github.com/user-attachments/assets/ce9033bf-4136-4fe1-a527-03e7fc43ed3f" />
+사용자의 성향에 따라 성공확률이 다르게 나타나고, Gemini API가 다른 방식으로 조언을 합니다.
+
 
 메인 페이지
 <img width="1039" height="848" alt="image" src="https://github.com/user-attachments/assets/22f57859-7d5d-46ef-9667-8df56889c695" />
@@ -118,6 +122,7 @@ predicted_rate = predict_success_rate(
 
 예시:
 - /quests 예시
+
   메인  페이지
   <img width="1037" height="1074" alt="image" src="https://github.com/user-attachments/assets/ccf9a969-1d88-4aea-b589-28ef9edee08c" />
   특정 퀘스트의 성공을 여러번 하면 성공률이 높아짐을 확인할 수 있습니다.
@@ -126,6 +131,7 @@ predicted_rate = predict_success_rate(
   <img width="1016" height="1102" alt="image" src="https://github.com/user-attachments/assets/bc50755c-0aa8-4a6a-bbcc-25821f02c2f6" />
   
 - /plot/dashboard 예시
+
   메인 페이지
   <img width="1038" height="809" alt="image" src="https://github.com/user-attachments/assets/efbc1bbb-2f9a-4c5a-86f5-369b039b23e9" />
   개인 퀘스트 현황
@@ -147,6 +153,7 @@ predicted_rate = predict_success_rate(
   <img width="1018" height="1109" alt="image" src="https://github.com/user-attachments/assets/fad3cfae-c5a0-4158-97b7-07e6b0c90180" />
 
 - /calendar 예시
+
   메인 페이지
   <img width="1033" height="991" alt="image" src="https://github.com/user-attachments/assets/3dc2f898-8e35-42c9-99d5-7d35223f4a14" />
 
