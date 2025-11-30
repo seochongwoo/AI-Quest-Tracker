@@ -75,6 +75,7 @@ user_id, name, category, duration, difficulty, completed, ...
 - 퀘스트 이름(name)을 SentenceTransformer로 임베딩하여 모델 피처에 사용
 - 사용자별 완료율(user_success_rate), 기간(days), 난이도(difficulty) 등을 피처로 활용하여 성공 여부(completed) 예측
 - 학습된 모델과 임베딩 객체를 포함한 튜플을 model/model.pkl로 저장
+- 서버시작시 train.py가 자동으로 실행됩니다. 사용할 수록 머신이 재학습 되어 더욱 정확한 예측값을 내놓습니다!
 ```python
 # train.py에서 모델과 임베더 객체를 함께 저장합니다.
 dump((model, embedder), MODEL_PATH)
@@ -156,6 +157,7 @@ predicted_rate = predict_success_rate(
 - /calendar 예시
 
   메인 페이지
+  streak day를 계산해서 사용자가 연속적으로 접속할 수 있게 합니다.
   <img width="1033" height="991" alt="image" src="https://github.com/user-attachments/assets/3dc2f898-8e35-42c9-99d5-7d35223f4a14" />
 
 
