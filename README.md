@@ -113,7 +113,7 @@ predicted_rate = predict_success_rate(
 - 로그인 화면
   메인페이지
   <img width="1031" height="490" alt="image" src="https://github.com/user-attachments/assets/f8b923a5-6b08-4033-a961-2fca7ba22b80" />
-  회원 가입 페이지
+  회원 가입 페이지(/onboarding 페이지)
   <img width="1027" height="521" alt="image" src="https://github.com/user-attachments/assets/ce9033bf-4136-4fe1-a527-03e7fc43ed3f" />
   사용자의 성향에 따라 성공확률이 다르게 나타나고, Gemini API가 다른 방식으로 조언을 합니다.
 
